@@ -51,6 +51,13 @@
     return seconds > 0 ? seconds : null;
   }
 
+  function formatSeconds(total) {
+    const safe = Math.max(0, Number(total || 0));
+    const minutes = Math.floor(safe / 60);
+    const seconds = safe % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  }
+
   function renderShell() {
     document.body.innerHTML = `
       <main>
@@ -140,7 +147,10 @@
       if (category === 'action') {
         button = `<button class="secondary" data-action="complete" data-id="${event.id}">없애기</button>`;
       } else if (event.status === 'running' && event.duration_seconds) {
-        button = `<button class="stop" data-action="complete-timed" data-id="${event.id}">타이머 완료</button>`;
+        button = `
+          <button class="start timer-running" disabled>타이머 실행 중 (${formatSeconds(event.remaining_seconds ?? event.duration_seconds)})</button>
+          <button class="stop" data-action="complete-timed" data-id="${event.id}">타이머 완료</button>
+        `;
       } else if (duration) {
         button = `<button class="start" data-action="start-timer" data-id="${event.id}">타이머 시작 (${duration}초)</button>`;
       }
@@ -182,13 +192,18 @@
     }
     root.innerHTML = summary.map((item, index) => {
       const canStartTimer = item.unit === '초' || item.unit === '분';
+      const timerButton = item.running
+        ? `<button class="start timer-running" disabled>타이머 실행 중 (${formatSeconds(item.remaining_seconds ?? item.duration_seconds)})</button>`
+        : canStartTimer
+          ? `<button class="start" data-action="start-accumulation" data-index="${index}">타이머 시작</button>`
+          : '';
       return `
         <article class="item">
           <div>
             <div class="item-title">${escapeHtml(item.item_name)} ${item.amount}${escapeHtml(item.unit)}</div>
             <div class="meta">미완료 ${item.ids.length}개 합산</div>
           </div>
-          ${canStartTimer ? `<button class="start" data-action="start-accumulation" data-index="${index}">타이머 시작</button>` : ''}
+          ${timerButton}
           <button class="secondary" data-action="complete-group" data-index="${index}">완료</button>
         </article>
       `;

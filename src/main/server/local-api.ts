@@ -238,7 +238,15 @@ export class LocalApiServer {
     events: RouletteEvent[];
     from: string;
     to: string;
-    summary?: Array<{ item_name: string; amount: number; unit: string; ids: string[] }>;
+    summary?: Array<{
+      item_name: string;
+      amount: number;
+      unit: string;
+      ids: string[];
+      running?: boolean;
+      duration_seconds?: number;
+      remaining_seconds?: number;
+    }>;
   }> {
     if (category === 'action') {
       await this.services.expireActionEvents();
@@ -260,7 +268,15 @@ export class LocalApiServer {
       return { category, count: events.length, events, ...range };
     }
 
-    const summaryMap = new Map<string, { item_name: string; amount: number; unit: string; ids: string[] }>();
+    const summaryMap = new Map<string, {
+      item_name: string;
+      amount: number;
+      unit: string;
+      ids: string[];
+      running?: boolean;
+      duration_seconds?: number;
+      remaining_seconds?: number;
+    }>();
     for (const event of events) {
       const itemName = event.item_name ?? event.roulette_content;
       const unit = event.unit ?? '';
@@ -268,6 +284,11 @@ export class LocalApiServer {
       const current = summaryMap.get(key) ?? { item_name: itemName, amount: 0, unit, ids: [] };
       current.amount += event.amount ?? 0;
       current.ids.push(event.id);
+      if (event.status === 'running' && event.duration_seconds) {
+        current.running = true;
+        current.duration_seconds = event.duration_seconds;
+        current.remaining_seconds = event.remaining_seconds ?? event.duration_seconds;
+      }
       summaryMap.set(key, current);
     }
 
