@@ -5,7 +5,7 @@ export const OBS_REMOTE_ASSET_BASE = 'https://rirang1123.github.io/local-roulett
 export const CATEGORY_LABELS = {
   action: '리액션',
   accumulation: '누적형',
-  tracked: '당첨형',
+  tracked: '당첨룰렛',
   timed: '타이머',
   excluded: '제외',
   unclassified: '미분류',

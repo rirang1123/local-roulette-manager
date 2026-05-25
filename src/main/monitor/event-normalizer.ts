@@ -33,10 +33,6 @@ export function normalizeEvent(payload: RawRoulettePayload, mapping?: RouletteMa
     return base;
   }
 
-  if (mapping.category === 'action') {
-    base.status = 'completed';
-  }
-
   if (mapping.category === 'excluded') {
     base.status = 'completed';
   }

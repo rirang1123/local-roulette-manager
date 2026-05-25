@@ -182,6 +182,7 @@ function Manage({
     return true;
   });
   const accumulationEvents = filtered.filter((event) => event.category === 'accumulation');
+  const actionEvents = filtered.filter((event) => event.category === 'action');
   const tableEvents = filtered.filter((event) => event.category !== 'accumulation');
 
   return (
@@ -228,17 +229,18 @@ function Manage({
       </section>
       {activeCategory === 'tracked' && (
         <section className="panel filter-panel">
-          <strong>당첨 항목 필터</strong>
+          <strong>당첨룰렛 항목 필터</strong>
           <select value={trackedContentFilter} onChange={(event) => setTrackedContentFilter(event.target.value)}>
             <option value="all">전체 후처리 항목</option>
             {trackedOptions.map((content) => (
               <option value={content} key={content}>{content}</option>
             ))}
           </select>
-          <p className="muted">당첨형으로 들어온 룰렛 내용이 자동으로 드롭다운 항목에 추가됩니다.</p>
+          <p className="muted">당첨룰렛으로 들어온 룰렛 내용이 자동으로 드롭다운 항목에 추가됩니다.</p>
         </section>
       )}
-      {tableEvents.length > 0 && <EventTable events={tableEvents} run={run} showCategory={false} />}
+      {activeCategory === 'action' && actionEvents.length > 0 && <ActionQueue events={actionEvents} run={run} />}
+      {activeCategory !== 'action' && tableEvents.length > 0 && <EventTable events={tableEvents} run={run} showCategory={false} />}
       {activeCategory === 'accumulation' && accumulationEvents.length > 0 && <Accumulation events={accumulationEvents} run={run} />}
       {filtered.length === 0 && <section className="panel muted">선택한 처리 방식에 해당하는 룰렛이 없습니다.</section>}
     </>
@@ -246,6 +248,36 @@ function Manage({
 }
 
 type ManagedCategory = Extract<RouletteCategory, 'action' | 'accumulation' | 'tracked'>;
+
+function ActionQueue({
+  events,
+  run,
+}: {
+  events: RouletteEvent[];
+  run: (action: () => Promise<unknown>) => void;
+}) {
+  return (
+    <section className="panel">
+      <div className="row-heading">
+        <h3>리액션 대기열</h3>
+        <span className="muted">최근 항목이 위에 표시되고 1분 뒤 자동으로 사라집니다.</span>
+      </div>
+      <div className="action-list">
+        {events.map((event) => (
+          <article className="action-item" key={event.id}>
+            <div>
+              <strong>{event.roulette_content}</strong>
+              <span>{formatDateTime(event.received_at)} / {event.nickname} / {event.value}</span>
+            </div>
+            <button className="small secondary" onClick={() => run(() => window.rouletteApi.updateStatus(event.id, 'completed'))}>
+              없애기
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function Dashboard({
   status,

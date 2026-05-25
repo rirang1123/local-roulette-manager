@@ -70,6 +70,35 @@ export class EventStore {
     });
   }
 
+  async completeExpiredActionEvents(maxAgeMs: number): Promise<number> {
+    const paths = await ensureAppData();
+    const files = await this.allLogFiles();
+    const cutoff = Date.now() - maxAgeMs;
+    let changed = 0;
+
+    for (const file of files) {
+      const filePath = path.join(paths.logs, file);
+      const events = await readJsonFile<RouletteEvent[]>(filePath, []);
+      let fileChanged = false;
+
+      for (const event of events) {
+        if (event.category !== 'action' || event.status !== 'pending') continue;
+        const receivedAt = Date.parse(event.received_at);
+        if (Number.isNaN(receivedAt) || receivedAt > cutoff) continue;
+        event.status = 'completed';
+        event.ended_at = new Date().toISOString();
+        changed += 1;
+        fileChanged = true;
+      }
+
+      if (fileChanged) {
+        await writeJsonFileAtomic(filePath, events);
+      }
+    }
+
+    return changed;
+  }
+
   async updateEvent(id: string, mutator: (event: RouletteEvent) => void): Promise<RouletteEvent | null> {
     const paths = await ensureAppData();
     const files = await this.allLogFiles();
@@ -145,6 +174,16 @@ export class EventStore {
     const idSet = new Set(ids);
     const events = await this.allEvents();
     return events.filter((event) => idSet.has(event.id));
+  }
+
+  async runningTimers(): Promise<RouletteEvent[]> {
+    const events = await this.list({
+      dateFrom: '1970-01-01',
+      dateTo: '9999-12-31',
+      status: 'running',
+      limit: 100000,
+    });
+    return events.filter((event) => event.duration_seconds);
   }
 
   private async filesInRange(from: string, to: string): Promise<string[]> {

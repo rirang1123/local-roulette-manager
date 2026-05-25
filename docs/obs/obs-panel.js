@@ -5,7 +5,7 @@
   const assetVersion = config.assetVersion || Date.now();
   const categories = [
     ['action', '리액션'],
-    ['tracked', '추적'],
+    ['tracked', '당첨룰렛'],
     ['accumulation', '누적'],
   ];
   const periods = [
@@ -94,7 +94,7 @@
           </div>
         </section>
         <section id="trackedFilterWrap" class="panel hidden">
-          <h2>추적 항목 필터</h2>
+          <h2>당첨룰렛 항목 필터</h2>
           <select id="trackedFilter"></select>
         </section>
         <section class="panel">
@@ -174,7 +174,9 @@
       const title = escapeHtml(event.roulette_content);
       const meta = `${escapeHtml(event.nickname)} / ${event.value} / ${escapeHtml(event.status)}`;
       const duration = parseDurationSeconds(event.roulette_content);
-      let button = `<button data-action="complete" data-id="${event.id}">완료</button>`;
+      let button = activeCategory === 'action'
+        ? `<button class="secondary" data-action="complete" data-id="${event.id}">없애기</button>`
+        : `<button data-action="complete" data-id="${event.id}">완료</button>`;
       if (event.status === 'running' && event.duration_seconds) {
         button = `<button class="stop" data-action="complete-timed" data-id="${event.id}">타이머 완료</button>`;
       } else if (duration) {

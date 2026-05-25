@@ -350,6 +350,44 @@ th, td {
   font-weight: 800;
 }
 
+.row-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.row-heading h3 {
+  margin: 0;
+}
+
+.action-list {
+  display: grid;
+  gap: 8px;
+}
+
+.action-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e6ebf0;
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.action-item div {
+  display: grid;
+  gap: 4px;
+}
+
+.action-item span {
+  color: #6a7480;
+  font-size: 12px;
+}
+
 .timer-inline {
   margin-top: 4px;
   color: #c2410c;

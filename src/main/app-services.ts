@@ -28,9 +28,12 @@ export class AppServices {
     (event) => this.emitChange(event),
   );
   private dailyBackupTimer: NodeJS.Timeout | null = null;
+  private actionExpiryTimer: NodeJS.Timeout | null = null;
 
   async startBackgroundJobs(): Promise<void> {
     await this.backupService.runDailyAutoBackup(this.settingsStore);
+    await this.expireActionEvents();
+    await this.timerService.restoreRunning();
     this.dailyBackupTimer = setInterval(() => {
       this.backupService.runDailyAutoBackup(this.settingsStore)
         .then((created) => {
@@ -38,12 +41,19 @@ export class AppServices {
         })
         .catch(() => undefined);
     }, 60 * 60 * 1000);
+    this.actionExpiryTimer = setInterval(() => {
+      this.expireActionEvents().catch(() => undefined);
+    }, 10 * 1000);
   }
 
   stopBackgroundJobs(): void {
     if (this.dailyBackupTimer) {
       clearInterval(this.dailyBackupTimer);
       this.dailyBackupTimer = null;
+    }
+    if (this.actionExpiryTimer) {
+      clearInterval(this.actionExpiryTimer);
+      this.actionExpiryTimer = null;
     }
   }
 
@@ -112,6 +122,12 @@ export class AppServices {
     const event = await this.eventStore.updateStatus(id, status);
     this.emitChange();
     return event;
+  }
+
+  async expireActionEvents(): Promise<number> {
+    const changed = await this.eventStore.completeExpiredActionEvents(60 * 1000);
+    if (changed) this.emitChange();
+    return changed;
   }
 
   async deleteAllLogs(): Promise<number> {

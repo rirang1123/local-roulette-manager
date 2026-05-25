@@ -243,6 +243,10 @@ export class LocalApiServer {
     events: RouletteEvent[];
     summary?: Array<{ item_name: string; amount: number; unit: string; ids: string[] }>;
   }> {
+    if (category === 'action') {
+      await this.services.expireActionEvents();
+    }
+
     const events =
       category === 'tracked'
         ? [
