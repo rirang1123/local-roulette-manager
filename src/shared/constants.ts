@@ -1,6 +1,6 @@
 export const LOCAL_API_HOST = '127.0.0.1' as const;
 export const DEFAULT_LOCAL_API_PORT = 17777;
-export const OBS_REMOTE_ASSET_BASE = 'https://rirang1123.github.io/local-roulette-manager';
+export const OBS_REMOTE_ASSET_BASE = 'https://rirang1123.github.io/local-roulette-manager-obs';
 
 export const CATEGORY_LABELS = {
   action: '리액션',
