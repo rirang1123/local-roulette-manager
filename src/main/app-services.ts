@@ -389,6 +389,26 @@ async function scrapeRouletteCatalog(url: string): Promise<Array<{ content: stri
             .replace(/[|/]+$/, '')
             .trim();
         }
+        const directItems = [];
+        for (const row of document.querySelectorAll('.roulette_box')) {
+          const name = clean(row.querySelector('.input_roulette_name')?.value || '');
+          const percent = clean(row.querySelector('.input_roulette_percent')?.value || '');
+          if (name) {
+            directItems.push({
+              content: name,
+              chance_text: percent ? percent + '%' : undefined
+            });
+          }
+        }
+        if (directItems.length) {
+          const seen = new Set();
+          return directItems.filter((item) => {
+            if (seen.has(item.content)) return false;
+            seen.add(item.content);
+            return true;
+          });
+        }
+
         const candidates = [];
         const selectors = ['tr', 'li', '[role="row"]', '[class*="item"]', '[class*="roulette"]', '[class*="reward"]'];
         for (const selector of selectors) {
