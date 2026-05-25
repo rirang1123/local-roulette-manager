@@ -4,6 +4,11 @@ Weflab 룰렛 결과를 자동으로 가져와서 OBS에서 바로 처리할 수
 
 설치 과정 없이 압축만 풀고 실행할 수 있습니다.
 
+[![Download v0.1.0](https://img.shields.io/badge/Download-v0.1.0%20(Windows%20zip)-2563eb?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/rirang1123/local-roulette-manager/releases/download/v0.1.0/Roulette-Manager-portable-folder-0.1.0-today-lock.zip)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.1.0-475569?style=for-the-badge&logo=github&logoColor=white)](https://github.com/rirang1123/local-roulette-manager/releases/tag/v0.1.0)
+
+위 `Download` 버튼을 누르면 `Roulette-Manager-portable-folder-0.1.0-today-lock.zip` 파일이 바로 다운로드됩니다.
+
 ## 이런 상황에 사용합니다
 
 - Weflab 룰렛 결과를 방송 중에 빠르게 확인하고 싶을 때
