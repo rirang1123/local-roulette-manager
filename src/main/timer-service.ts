@@ -41,6 +41,14 @@ export class TimerService {
     });
   }
 
+  async runningTimers(): Promise<RouletteEvent[]> {
+    const timers = await this.eventStore.runningTimers();
+    const synced = await Promise.all(timers.map((timer) => this.syncTimer(timer.id)));
+    return synced.filter((event): event is RouletteEvent =>
+      Boolean(event?.duration_seconds && event.status === 'running' && event.remaining_seconds !== undefined),
+    );
+  }
+
   private runInterval(id: string): void {
     this.clearInterval(id);
     const interval = setInterval(async () => {

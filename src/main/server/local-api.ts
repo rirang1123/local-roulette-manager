@@ -160,14 +160,8 @@ export class LocalApiServer {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/timers/running') {
-      const events = await this.services.eventStore.list({
-        dateFrom: '1970-01-01',
-        dateTo: '9999-12-31',
-        status: 'running',
-        limit: 1000,
-      });
       sendJson(response, 200, {
-        events: events.filter((event) => event.duration_seconds && event.remaining_seconds !== undefined),
+        events: await this.services.timerService.runningTimers(),
       });
       return;
     }

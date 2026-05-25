@@ -123,9 +123,15 @@
     document.querySelector('.period-bar').className = activeTab === 'action' ? 'period-bar hidden' : 'period-bar';
   }
 
-  function renderCards(root, events, emptyText, category) {
+  function actionSecondsLeft(event) {
+    const receivedAt = Date.parse(event.received_at);
+    if (Number.isNaN(receivedAt)) return null;
+    return Math.max(0, Math.ceil((receivedAt + 60 * 1000 - Date.now()) / 1000));
+  }
+
+  function renderCards(root, events, emptyText, category, options = {}) {
     if (!events.length) {
-      root.innerHTML = `<div class="empty">${emptyText}</div>`;
+      root.innerHTML = options.hideEmpty ? '' : `<div class="empty">${emptyText}</div>`;
       return;
     }
     root.innerHTML = events.map((event) => {
@@ -143,6 +149,7 @@
           <div>
             <div class="item-title">${escapeHtml(event.roulette_content)}</div>
             <div class="meta">${escapeHtml(event.nickname)} / ${event.value} / ${escapeHtml(event.status)}</div>
+            ${category === 'action' ? `<div class="meta">자동 삭제까지 ${actionSecondsLeft(event) ?? '-'}초</div>` : ''}
           </div>
           ${button}
         </article>
@@ -167,10 +174,10 @@
     });
   }
 
-  function renderAccumulation(root, payload) {
+  function renderAccumulation(root, payload, options = {}) {
     const summary = payload.summary || [];
     if (!summary.length) {
-      root.innerHTML = '<div class="empty">해당 기간에 처리할 누적형이 없습니다.</div>';
+      root.innerHTML = options.hideEmpty ? '' : '<div class="empty">해당 기간에 처리할 누적형이 없습니다.</div>';
       return;
     }
     root.innerHTML = summary.map((item, index) => {
@@ -210,22 +217,16 @@
   function renderAll(action, tracked, accumulation) {
     const root = document.getElementById('items');
     root.innerHTML = `
-      <div class="section-heading">
-        <div class="row"><h2>리액션</h2><span class="muted">${action.count}개</span></div>
-        <div id="allActionItems" class="list"></div>
-      </div>
-      <div class="section-heading">
-        <div class="row"><h2>당첨</h2><span class="muted">${tracked.count}개</span></div>
-        <div id="allTrackedItems" class="list"></div>
-      </div>
-      <div class="section-heading">
-        <div class="row"><h2>누적</h2><span class="muted">${accumulation.count}개</span></div>
-        <div id="allAccumulationItems" class="list"></div>
-      </div>
+      <div id="allAccumulationItems" class="list"></div>
+      <div id="allActionItems" class="list"></div>
+      <div id="allTrackedItems" class="list"></div>
     `;
-    renderCards(document.getElementById('allActionItems'), action.events, '처리할 리액션이 없습니다.', 'action');
-    renderCards(document.getElementById('allTrackedItems'), tracked.events, '해당 기간에 처리할 당첨 항목이 없습니다.', 'tracked');
-    renderAccumulation(document.getElementById('allAccumulationItems'), accumulation);
+    renderAccumulation(document.getElementById('allAccumulationItems'), accumulation, { hideEmpty: true });
+    renderCards(document.getElementById('allActionItems'), action.events, '처리할 리액션이 없습니다.', 'action', { hideEmpty: true });
+    renderCards(document.getElementById('allTrackedItems'), tracked.events, '해당 기간에 처리할 당첨 항목이 없습니다.', 'tracked', { hideEmpty: true });
+    if (!root.textContent.trim()) {
+      root.innerHTML = '<div class="empty">표시할 항목이 없습니다.</div>';
+    }
   }
 
   async function refresh() {
