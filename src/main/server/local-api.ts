@@ -2,6 +2,7 @@ import http from 'node:http';
 import { URL } from 'node:url';
 import { parseDurationSeconds, type AppServices } from '../app-services';
 import { OBS_REMOTE_ASSET_BASE } from '../../shared/constants';
+import { dateRangeForPeriod, formatDateKey, type DatePeriod } from '../../shared/date';
 import type { RouletteCategory, RouletteEvent, RouletteStatus } from '../../shared/types';
 
 function sendJson(response: http.ServerResponse, statusCode: number, body: unknown): void {
@@ -197,7 +198,7 @@ export class LocalApiServer {
     if (request.method === 'GET' && url.pathname === '/api/processing/items') {
       const category = url.searchParams.get('category');
       if (!isObsManagedCategory(category)) throw new Error('valid category is required');
-      sendJson(response, 200, await this.processingItems(category));
+      sendJson(response, 200, await this.processingItems(category, readPeriodQuery(url)));
       return;
     }
 
@@ -237,10 +238,12 @@ export class LocalApiServer {
     sendJson(response, 404, { error: 'not found' });
   }
 
-  private async processingItems(category: ObsManagedCategory): Promise<{
+  private async processingItems(category: ObsManagedCategory, range = dateRangeForPeriod('daily')): Promise<{
     category: ObsManagedCategory;
     count: number;
     events: RouletteEvent[];
+    from: string;
+    to: string;
     summary?: Array<{ item_name: string; amount: number; unit: string; ids: string[] }>;
   }> {
     if (category === 'action') {
@@ -250,17 +253,17 @@ export class LocalApiServer {
     const events =
       category === 'tracked'
         ? [
-            ...(await this.services.eventStore.byCategory('tracked', 'running')),
-            ...(await this.services.eventStore.byCategory('tracked', 'pending')),
+            ...(await this.services.eventStore.list({ dateFrom: range.from, dateTo: range.to, category: 'tracked', status: 'running', limit: 100000 })),
+            ...(await this.services.eventStore.list({ dateFrom: range.from, dateTo: range.to, category: 'tracked', status: 'pending', limit: 100000 })),
           ]
         : category === 'accumulation'
           ? [
-              ...(await this.services.eventStore.byCategory('accumulation', 'running')),
-              ...(await this.services.eventStore.byCategory('accumulation', 'pending')),
+              ...(await this.services.eventStore.list({ dateFrom: range.from, dateTo: range.to, category: 'accumulation', status: 'running', limit: 100000 })),
+              ...(await this.services.eventStore.list({ dateFrom: range.from, dateTo: range.to, category: 'accumulation', status: 'pending', limit: 100000 })),
             ]
         : await this.services.eventStore.byCategory(category, 'pending');
     if (category !== 'accumulation') {
-      return { category, count: events.length, events };
+      return { category, count: events.length, events, ...range };
     }
 
     const summaryMap = new Map<string, { item_name: string; amount: number; unit: string; ids: string[] }>();
@@ -289,7 +292,7 @@ export class LocalApiServer {
       raw_payload: { summary_ids: item.ids },
     }));
 
-    return { category, count: summary.length, events: summaryEvents, summary };
+    return { category, count: summary.length, events: summaryEvents, summary, ...range };
   }
 }
 
@@ -297,6 +300,18 @@ type ObsManagedCategory = Extract<RouletteCategory, 'action' | 'accumulation' | 
 
 function isObsManagedCategory(category: unknown): category is ObsManagedCategory {
   return category === 'action' || category === 'accumulation' || category === 'tracked';
+}
+
+function readPeriodQuery(url: URL): { from: string; to: string } {
+  const period = url.searchParams.get('period');
+  const anchorDate = url.searchParams.get('anchorDate') || formatDateKey();
+  if (period === 'daily' || period === 'weekly' || period === 'monthly') {
+    return dateRangeForPeriod(period as DatePeriod, anchorDate);
+  }
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  if (from && to) return { from, to };
+  return dateRangeForPeriod('daily', anchorDate);
 }
 
 function renderRemoteObsShell(token: string, entryFile: string, title: string): string {

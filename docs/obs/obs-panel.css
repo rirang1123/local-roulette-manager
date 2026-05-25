@@ -24,6 +24,11 @@ header,
   gap: 10px;
 }
 
+.toolbar {
+  display: grid;
+  gap: 10px;
+}
+
 header > div {
   display: grid;
   gap: 3px;
@@ -111,6 +116,30 @@ button:disabled {
   gap: 8px;
 }
 
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.tabs button {
+  border: 1px solid #dce2e8;
+  background: #f8fafc;
+  color: #17202a;
+}
+
+.tabs button.selected {
+  border-color: #1769e0;
+  background: #1769e0;
+  color: #fff;
+}
+
+.period-bar {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 8px;
+}
+
 .modes {
   grid-template-columns: 1fr 1fr 1fr;
 }
@@ -146,7 +175,8 @@ button:disabled {
   font-weight: 700;
 }
 
-select {
+select,
+input[type="date"] {
   width: 100%;
   min-height: 34px;
   border: 1px solid #cbd5df;

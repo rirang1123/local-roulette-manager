@@ -3,7 +3,9 @@
   const token = config.token || '';
   const assetBase = config.assetBase || '';
   const assetVersion = config.assetVersion || Date.now();
-  let trackedFilter = 'all';
+  let activeTab = 'action';
+  let period = 'daily';
+  let anchorDate = new Date().toISOString().slice(0, 10);
 
   injectStyle(`${assetBase}/obs/obs-panel.css?v=${assetVersion}`);
 
@@ -67,58 +69,61 @@
           <button id="start" class="start">모니터링 시작</button>
           <button id="stop" class="secondary">모니터링 중지</button>
         </div>
-        <section class="panel">
-          <h2>자동 분류</h2>
-          <p class="muted">당첨룰렛으로 지정한 항목만 당첨 처리하고, 숫자+단위는 누적형, 나머지는 리액션으로 분류됩니다.</p>
-          <div class="field">
-            <label for="accumulationPeriod">새 누적형 기본 기간</label>
-            <select id="accumulationPeriod">
-              <option value="daily">일 단위</option>
-              <option value="weekly">주 단위</option>
-              <option value="monthly">월 단위</option>
+        <section class="panel toolbar">
+          <div class="tabs">
+            <button data-tab="action">리액션</button>
+            <button data-tab="tracked">당첨</button>
+            <button data-tab="accumulation">누적</button>
+          </div>
+          <div class="period-bar">
+            <select id="period">
+              <option value="daily">일</option>
+              <option value="weekly">주</option>
+              <option value="monthly">월</option>
             </select>
+            <input id="anchorDate" type="date" />
           </div>
         </section>
         <section class="panel">
-          <div class="row"><h2>리액션</h2><span id="actionCount" class="muted">0개</span></div>
-          <div id="actionItems" class="list"></div>
-        </section>
-        <section class="panel">
-          <div class="row"><h2>당첨룰렛</h2><span id="trackedCount" class="muted">0개</span></div>
-          <div class="field"><select id="trackedFilter"></select></div>
-          <div id="trackedItems" class="list"></div>
-        </section>
-        <section class="panel">
-          <div class="row"><h2>누적형</h2><span id="accumulationCount" class="muted">0개</span></div>
-          <div id="accumulationItems" class="list"></div>
+          <div class="row">
+            <h2 id="listTitle">리액션</h2>
+            <span id="listCount" class="muted">0개</span>
+          </div>
+          <div id="rangeText" class="muted"></div>
+          <div id="items" class="list"></div>
         </section>
       </main>
     `;
     document.getElementById('start').onclick = () => api('/api/monitor/start', { method: 'POST' }).then(refresh).catch(alert);
     document.getElementById('stop').onclick = () => api('/api/monitor/stop', { method: 'POST' }).then(refresh).catch(alert);
     document.getElementById('sample').onclick = () => api('/api/events/sample', { method: 'POST' }).then(refresh).catch(() => undefined);
-    document.getElementById('trackedFilter').onchange = (event) => {
-      trackedFilter = event.target.value;
+    document.querySelectorAll('[data-tab]').forEach((button) => {
+      button.onclick = () => {
+        activeTab = button.dataset.tab;
+        refresh().catch(() => undefined);
+      };
+    });
+    document.getElementById('period').value = period;
+    document.getElementById('period').onchange = (event) => {
+      period = event.target.value;
       refresh().catch(() => undefined);
     };
-    document.getElementById('accumulationPeriod').onchange = (event) => api('/api/processing/accumulation-period', {
-      method: 'POST',
-      body: JSON.stringify({ period: event.target.value }),
-    }).then(refresh).catch(alert);
+    document.getElementById('anchorDate').value = anchorDate;
+    document.getElementById('anchorDate').onchange = (event) => {
+      anchorDate = event.target.value || new Date().toISOString().slice(0, 10);
+      refresh().catch(() => undefined);
+    };
   }
 
-  function renderTrackedFilter(events) {
-    const select = document.getElementById('trackedFilter');
-    const current = trackedFilter;
-    const options = [...new Set(events.map((event) => event.roulette_content))].sort((a, b) => a.localeCompare(b));
-    if (current !== 'all' && !options.includes(current)) trackedFilter = 'all';
-    select.innerHTML = '<option value="all">전체 당첨 항목</option>' + options.map((content) =>
-      `<option value="${escapeHtml(content)}" ${trackedFilter === content ? 'selected' : ''}>${escapeHtml(content)}</option>`
-    ).join('');
+  function updateTabs() {
+    document.querySelectorAll('[data-tab]').forEach((button) => {
+      button.className = button.dataset.tab === activeTab ? 'selected' : '';
+    });
+    document.querySelector('.period-bar').className = activeTab === 'action' ? 'period-bar hidden' : 'period-bar';
   }
 
-  function renderCards(rootId, events, emptyText) {
-    const root = document.getElementById(rootId);
+  function renderCards(events, emptyText) {
+    const root = document.getElementById('items');
     if (!events.length) {
       root.innerHTML = `<div class="empty">${emptyText}</div>`;
       return;
@@ -126,7 +131,7 @@
     root.innerHTML = events.map((event) => {
       const duration = parseDurationSeconds(event.roulette_content);
       let button = `<button class="secondary" data-action="complete" data-id="${event.id}">완료</button>`;
-      if (event.category === 'action') {
+      if (activeTab === 'action') {
         button = `<button class="secondary" data-action="complete" data-id="${event.id}">없애기</button>`;
       } else if (event.status === 'running' && event.duration_seconds) {
         button = `<button class="stop" data-action="complete-timed" data-id="${event.id}">타이머 완료</button>`;
@@ -163,11 +168,10 @@
   }
 
   function renderAccumulation(payload) {
-    document.getElementById('accumulationCount').textContent = `${payload.count}개`;
-    const root = document.getElementById('accumulationItems');
+    const root = document.getElementById('items');
     const summary = payload.summary || [];
     if (!summary.length) {
-      root.innerHTML = '<div class="empty">처리할 누적형이 없습니다.</div>';
+      root.innerHTML = '<div class="empty">해당 기간에 처리할 누적형이 없습니다.</div>';
       return;
     }
     root.innerHTML = summary.map((item, index) => {
@@ -176,7 +180,7 @@
         <article class="item">
           <div>
             <div class="item-title">${escapeHtml(item.item_name)} ${item.amount}${escapeHtml(item.unit)}</div>
-            <div class="meta">원본 ${item.ids.length}개 합산</div>
+            <div class="meta">미완료 ${item.ids.length}개 합산</div>
           </div>
           ${canStartTimer ? `<button class="start" data-action="start-accumulation" data-index="${index}">타이머 시작</button>` : ''}
           <button class="secondary" data-action="complete-group" data-index="${index}">완료</button>
@@ -205,12 +209,7 @@
   }
 
   async function refresh() {
-    const [status, action, tracked, accumulation] = await Promise.all([
-      api('/api/status'),
-      api('/api/processing/items?category=action'),
-      api('/api/processing/items?category=tracked'),
-      api('/api/processing/items?category=accumulation'),
-    ]);
+    const status = await api('/api/status');
     const running = Boolean(status.monitoring);
     const monitor = document.getElementById('monitorStatus');
     monitor.className = `status ${running ? 'running' : 'stopped'}`;
@@ -221,23 +220,25 @@
     document.getElementById('urlState').textContent = status.weflabUrlSaved ? 'URL 등록됨' : 'URL 미등록';
     document.getElementById('start').disabled = running;
     document.getElementById('stop').disabled = !running;
-    document.getElementById('accumulationPeriod').value = status.accumulationPeriod || 'weekly';
+    updateTabs();
 
-    renderTrackedFilter(tracked.events);
-    const trackedEvents = trackedFilter === 'all'
-      ? tracked.events
-      : tracked.events.filter((event) => event.roulette_content === trackedFilter);
+    const query = activeTab === 'action' ? '' : `&period=${period}&anchorDate=${anchorDate}`;
+    const payload = await api(`/api/processing/items?category=${activeTab}${query}`);
+    const titles = { action: '리액션', tracked: '당첨', accumulation: '누적' };
+    document.getElementById('listTitle').textContent = titles[activeTab];
+    document.getElementById('listCount').textContent = `${payload.count}개`;
+    document.getElementById('rangeText').textContent = activeTab === 'action' ? '' : `${payload.from} ~ ${payload.to}`;
 
-    document.getElementById('actionCount').textContent = `${action.count}개`;
-    document.getElementById('trackedCount').textContent = `${trackedEvents.length}개`;
-    renderCards('actionItems', action.events, '처리할 리액션이 없습니다.');
-    renderCards('trackedItems', trackedEvents, '처리할 당첨룰렛이 없습니다.');
-    renderAccumulation(accumulation);
+    if (activeTab === 'accumulation') {
+      renderAccumulation(payload);
+    } else {
+      renderCards(payload.events, activeTab === 'action' ? '처리할 리액션이 없습니다.' : '해당 기간에 처리할 당첨 항목이 없습니다.');
+    }
   }
 
   renderShell();
   refresh().catch((error) => {
-    document.getElementById('actionItems').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+    document.getElementById('items').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   });
   setInterval(() => refresh().catch(() => undefined), 3000);
 })();
