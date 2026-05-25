@@ -3,7 +3,7 @@
   const token = config.token || '';
   const assetBase = config.assetBase || '';
   const assetVersion = config.assetVersion || Date.now();
-  let activeTab = 'action';
+  let activeTab = 'all';
   let period = 'daily';
   let anchorDate = new Date().toISOString().slice(0, 10);
 
@@ -71,6 +71,7 @@
         </div>
         <section class="panel toolbar">
           <div class="tabs">
+            <button data-tab="all">전체</button>
             <button data-tab="action">리액션</button>
             <button data-tab="tracked">당첨</button>
             <button data-tab="accumulation">누적</button>
@@ -86,7 +87,7 @@
         </section>
         <section class="panel">
           <div class="row">
-            <h2 id="listTitle">리액션</h2>
+            <h2 id="listTitle">전체</h2>
             <span id="listCount" class="muted">0개</span>
           </div>
           <div id="rangeText" class="muted"></div>
@@ -122,8 +123,7 @@
     document.querySelector('.period-bar').className = activeTab === 'action' ? 'period-bar hidden' : 'period-bar';
   }
 
-  function renderCards(events, emptyText) {
-    const root = document.getElementById('items');
+  function renderCards(root, events, emptyText, category) {
     if (!events.length) {
       root.innerHTML = `<div class="empty">${emptyText}</div>`;
       return;
@@ -131,7 +131,7 @@
     root.innerHTML = events.map((event) => {
       const duration = parseDurationSeconds(event.roulette_content);
       let button = `<button class="secondary" data-action="complete" data-id="${event.id}">완료</button>`;
-      if (activeTab === 'action') {
+      if (category === 'action') {
         button = `<button class="secondary" data-action="complete" data-id="${event.id}">없애기</button>`;
       } else if (event.status === 'running' && event.duration_seconds) {
         button = `<button class="stop" data-action="complete-timed" data-id="${event.id}">타이머 완료</button>`;
@@ -167,8 +167,7 @@
     });
   }
 
-  function renderAccumulation(payload) {
-    const root = document.getElementById('items');
+  function renderAccumulation(root, payload) {
     const summary = payload.summary || [];
     if (!summary.length) {
       root.innerHTML = '<div class="empty">해당 기간에 처리할 누적형이 없습니다.</div>';
@@ -208,6 +207,27 @@
     });
   }
 
+  function renderAll(action, tracked, accumulation) {
+    const root = document.getElementById('items');
+    root.innerHTML = `
+      <div class="section-heading">
+        <div class="row"><h2>리액션</h2><span class="muted">${action.count}개</span></div>
+        <div id="allActionItems" class="list"></div>
+      </div>
+      <div class="section-heading">
+        <div class="row"><h2>당첨</h2><span class="muted">${tracked.count}개</span></div>
+        <div id="allTrackedItems" class="list"></div>
+      </div>
+      <div class="section-heading">
+        <div class="row"><h2>누적</h2><span class="muted">${accumulation.count}개</span></div>
+        <div id="allAccumulationItems" class="list"></div>
+      </div>
+    `;
+    renderCards(document.getElementById('allActionItems'), action.events, '처리할 리액션이 없습니다.', 'action');
+    renderCards(document.getElementById('allTrackedItems'), tracked.events, '해당 기간에 처리할 당첨 항목이 없습니다.', 'tracked');
+    renderAccumulation(document.getElementById('allAccumulationItems'), accumulation);
+  }
+
   async function refresh() {
     const status = await api('/api/status');
     const running = Boolean(status.monitoring);
@@ -222,17 +242,31 @@
     document.getElementById('stop').disabled = !running;
     updateTabs();
 
-    const query = activeTab === 'action' ? '' : `&period=${period}&anchorDate=${anchorDate}`;
-    const payload = await api(`/api/processing/items?category=${activeTab}${query}`);
-    const titles = { action: '리액션', tracked: '당첨', accumulation: '누적' };
+    const query = `&period=${period}&anchorDate=${anchorDate}`;
+    if (activeTab === 'all') {
+      const [action, tracked, accumulation] = await Promise.all([
+        api('/api/processing/items?category=action'),
+        api(`/api/processing/items?category=tracked${query}`),
+        api(`/api/processing/items?category=accumulation${query}`),
+      ]);
+      document.getElementById('listTitle').textContent = '전체';
+      document.getElementById('listCount').textContent = `${action.count + tracked.count + accumulation.count}개`;
+      document.getElementById('rangeText').textContent = `${tracked.from} ~ ${tracked.to}`;
+      renderAll(action, tracked, accumulation);
+      return;
+    }
+
+    const categoryQuery = activeTab === 'action' ? '' : query;
+    const payload = await api(`/api/processing/items?category=${activeTab}${categoryQuery}`);
+    const titles = { action: '리액션', tracked: '당첨', accumulation: '누적', all: '전체' };
     document.getElementById('listTitle').textContent = titles[activeTab];
     document.getElementById('listCount').textContent = `${payload.count}개`;
     document.getElementById('rangeText').textContent = activeTab === 'action' ? '' : `${payload.from} ~ ${payload.to}`;
 
     if (activeTab === 'accumulation') {
-      renderAccumulation(payload);
+      renderAccumulation(document.getElementById('items'), payload);
     } else {
-      renderCards(payload.events, activeTab === 'action' ? '처리할 리액션이 없습니다.' : '해당 기간에 처리할 당첨 항목이 없습니다.');
+      renderCards(document.getElementById('items'), payload.events, activeTab === 'action' ? '처리할 리액션이 없습니다.' : '해당 기간에 처리할 당첨 항목이 없습니다.', activeTab);
     }
   }
 
