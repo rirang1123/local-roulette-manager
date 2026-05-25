@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppStatus, RouletteCategory, RouletteEvent, RouletteMapping, RouletteStatus } from '../shared/types';
+import type { AppStatus, RouletteCatalogItem, RouletteCategory, RouletteEvent, RouletteMapping, RouletteStatus } from '../shared/types';
 import { CATEGORY_LABELS, STATUS_LABELS } from '../shared/constants';
 import { formatDateKey, formatDateTime } from '../shared/date';
 import './styles.css';
@@ -67,7 +67,7 @@ function App() {
         {error && <div className="error">{error}</div>}
         {page === 'dashboard' && <Dashboard status={status} events={events} run={run} />}
         {page === 'settings' && <Settings status={status} run={run} />}
-        {page === 'unclassified' && <Unclassified events={visibleEvents} run={run} />}
+        {page === 'unclassified' && <Unclassified status={status} events={visibleEvents} run={run} />}
         {page === 'logs' && <LogsPage events={visibleEvents} run={run} />}
         {page === 'backup-view' && <BackupViewPage />}
       </main>
@@ -297,6 +297,7 @@ function Dashboard({
 
 function Settings({ status, run }: { status: AppStatus | null; run: (action: () => Promise<unknown>) => void }) {
   const [url, setUrl] = useState('');
+  const [shareUrl, setShareUrl] = useState('');
   return (
     <>
       <header className="page-header">
@@ -331,10 +332,26 @@ function Settings({ status, run }: { status: AppStatus | null; run: (action: () 
   );
 }
 
-function Unclassified({ events, run }: { events: RouletteEvent[]; run: (action: () => Promise<unknown>) => void }) {
-  const unique = [...new Map(events.map((event) => [event.roulette_content, event])).values()];
+function Unclassified({
+  status,
+  run,
+}: {
+  status: AppStatus | null;
+  events: RouletteEvent[];
+  run: (action: () => Promise<unknown>) => void;
+}) {
+  const [items, setItems] = useState<RouletteCatalogItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [shareUrl, setShareUrl] = useState('');
   const selectedSet = new Set(selected);
+
+  async function refreshCatalog(): Promise<void> {
+    setItems(await window.rouletteApi.listRouletteCatalog());
+  }
+
+  useEffect(() => {
+    void refreshCatalog();
+  }, []);
 
   function toggle(content: string): void {
     setSelected((current) =>
@@ -345,7 +362,7 @@ function Unclassified({ events, run }: { events: RouletteEvent[]; run: (action: 
   }
 
   function selectAll(): void {
-    setSelected(unique.map((event) => event.roulette_content));
+    setSelected(items.map((item) => item.content));
   }
 
   function clearSelection(): void {
@@ -361,6 +378,7 @@ function Unclassified({ events, run }: { events: RouletteEvent[]; run: (action: 
       }
     }
     clearSelection();
+    await refreshCatalog();
   }
 
   return (
@@ -368,8 +386,12 @@ function Unclassified({ events, run }: { events: RouletteEvent[]; run: (action: 
       <header className="page-header">
         <div>
           <h2>당첨룰렛 설정</h2>
-          <p>당첨 목록에 해당하는 룰렛만 지정합니다. 나머지는 숫자+단위가 있으면 누적형, 아니면 리액션으로 자동 분류됩니다.</p>
+          <p>위플랩 시청자 룰렛 확률 공유 URL에서 가져온 항목 중 당첨 목록만 지정합니다.</p>
         </div>
+        <button onClick={() => run(async () => {
+          await window.rouletteApi.refreshRouletteCatalog();
+          await refreshCatalog();
+        })}>목록 새로고침</button>
       </header>
       <section className="panel actions wrap">
         <button className="secondary" onClick={selectAll}>전체 선택</button>
@@ -381,23 +403,46 @@ function Unclassified({ events, run }: { events: RouletteEvent[]; run: (action: 
           선택 항목 자동 분류
         </button>
       </section>
+      <section className="panel form">
+        <label>
+          시청자 룰렛 확률 공유 URL
+          <input type="password" value={shareUrl} onChange={(event) => setShareUrl(event.target.value)} placeholder="https://..." />
+        </label>
+        <div className="actions">
+          <button onClick={() => run(() => window.rouletteApi.saveRouletteShareUrl(shareUrl))}>등록하고 항목 가져오기</button>
+          <button className="secondary" onClick={() => run(() => window.rouletteApi.refreshRouletteCatalog())}>항목 새로고침</button>
+        </div>
+        <p className="muted">등록 상태: {status?.rouletteShareUrlSaved ? '등록됨' : '미등록'}</p>
+      </section>
+      {items.length === 0 && (
+        <section className="panel muted">설정에서 시청자 룰렛 확률 공유 URL을 등록하고 항목을 가져와 주세요.</section>
+      )}
       <div className="stack">
-        {unique.map((event) => (
-          <section className="panel classify" key={event.roulette_content}>
+        {items.map((item) => (
+          <section className="panel classify" key={item.content}>
             <label className="check-row">
               <input
                 type="checkbox"
-                checked={selectedSet.has(event.roulette_content)}
-                onChange={() => toggle(event.roulette_content)}
+                checked={selectedSet.has(item.content)}
+                onChange={() => toggle(item.content)}
               />
-              <strong>{event.roulette_content}</strong>
+              <strong>{item.content}</strong>
             </label>
-            <p className="muted">현재 분류: {CATEGORY_LABELS[event.category]}</p>
+            <p className="muted">
+              현재 분류: {CATEGORY_LABELS[item.mapped_category]}
+              {item.chance_text ? ` / 확률: ${item.chance_text}` : ''}
+            </p>
             <div className="actions wrap">
-              <button onClick={() => run(() => window.rouletteApi.setMapping(event.roulette_content, { category: 'tracked' }))}>
+              <button onClick={() => run(async () => {
+                await window.rouletteApi.setMapping(item.content, { category: 'tracked' });
+                await refreshCatalog();
+              })}>
                 당첨룰렛으로 지정
               </button>
-              <button className="secondary" onClick={() => run(() => window.rouletteApi.useAutoClassification(event.roulette_content))}>
+              <button className="secondary" onClick={() => run(async () => {
+                await window.rouletteApi.useAutoClassification(item.content);
+                await refreshCatalog();
+              })}>
                 자동 분류로 되돌리기
               </button>
             </div>

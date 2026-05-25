@@ -62,6 +62,12 @@ export interface FilterSettings {
   tracked_exclude_keywords: string[];
 }
 
+export interface RouletteCatalogItem {
+  content: string;
+  chance_text?: string;
+  mapped_category: RouletteCategory;
+}
+
 export interface AppSettings {
   monitoring: {
     weflab_url_saved: boolean;
@@ -95,6 +101,7 @@ export interface AppSettings {
 export interface AppStatus {
   monitoring: boolean;
   weflabUrlSaved: boolean;
+  rouletteShareUrlSaved: boolean;
   lastReceivedAt: string | null;
   serverUrl: string;
   obsPanelUrl: string;

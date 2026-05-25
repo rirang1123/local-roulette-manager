@@ -1,11 +1,13 @@
+import { BrowserWindow } from 'electron';
 import { EventEmitter } from 'node:events';
-import type { AccumulationSummaryItem, AccumulationPeriodType, AppStatus, LogQuery, RouletteEvent, RouletteMapping, RouletteStatus } from '../shared/types';
+import type { AccumulationSummaryItem, AccumulationPeriodType, AppStatus, LogQuery, RouletteCatalogItem, RouletteEvent, RouletteMapping, RouletteStatus } from '../shared/types';
 import { dateRangeForPeriod, nowIsoLocal } from '../shared/date';
 import { hasAccumulationAmount, parseAccumulationContent } from '../shared/accumulation';
 import { BackupService } from './backup/backup-service';
 import { EventStore } from './storage/event-store';
 import { FilterStore } from './storage/filter-store';
 import { MappingStore } from './storage/mapping-store';
+import { RouletteCatalogStore } from './storage/roulette-catalog-store';
 import { SecureUrlStore } from './storage/secure-url-store';
 import { SettingsStore } from './storage/settings-store';
 import { WeflabMonitor } from './monitor/weflab-monitor';
@@ -17,6 +19,7 @@ export class AppServices {
   readonly eventStore = new EventStore();
   readonly backupService = new BackupService(this.eventStore);
   readonly mappingStore = new MappingStore();
+  readonly rouletteCatalogStore = new RouletteCatalogStore();
   readonly filterStore = new FilterStore();
   readonly urlStore = new SecureUrlStore();
   readonly timerService = new TimerService(this.eventStore, () => this.emitChange());
@@ -63,8 +66,9 @@ export class AppServices {
       settings.processing.active_category = 'accumulation';
       await this.settingsStore.set(settings);
     }
-    const [weflabUrlSaved, latestEvent, counts, filters] = await Promise.all([
+    const [weflabUrlSaved, rouletteShareUrlSaved, latestEvent, counts, filters] = await Promise.all([
       this.urlStore.hasUrl(),
+      this.urlStore.hasRouletteShareUrl(),
       this.eventStore.latest(),
       this.eventStore.counts(),
       this.filterStore.get(),
@@ -75,6 +79,7 @@ export class AppServices {
     return {
       monitoring: this.monitor.isRunning(),
       weflabUrlSaved,
+      rouletteShareUrlSaved,
       lastReceivedAt: settings.monitoring.last_received_at,
       serverUrl: baseUrl,
       obsPanelUrl: `${baseUrl}/obs-panel?token=${settings.server.token}&v=${uiVersion}`,
@@ -96,6 +101,38 @@ export class AppServices {
       settings.monitoring.weflab_url_saved = true;
     });
     this.emitChange();
+  }
+
+  async saveRouletteShareUrl(url: string): Promise<RouletteCatalogItem[]> {
+    if (!/^https:\/\/.+/i.test(url.trim())) {
+      throw new Error('룰렛 확률 공유 URL은 https:// 로 시작해야 합니다.');
+    }
+    await this.urlStore.saveRouletteShareUrl(url.trim());
+    const items = await this.refreshRouletteCatalog();
+    this.emitChange();
+    return items;
+  }
+
+  async refreshRouletteCatalog(): Promise<RouletteCatalogItem[]> {
+    const url = await this.urlStore.readRouletteShareUrl();
+    if (!url) {
+      throw new Error('시청자 룰렛 확률 공유 URL이 등록되어 있지 않습니다.');
+    }
+    const scraped = await scrapeRouletteCatalog(url);
+    await this.rouletteCatalogStore.set(scraped);
+    return this.listRouletteCatalog();
+  }
+
+  async listRouletteCatalog(): Promise<RouletteCatalogItem[]> {
+    const [items, mappings] = await Promise.all([
+      this.rouletteCatalogStore.get(),
+      this.mappingStore.getAll(),
+    ]);
+    const period = await this.currentAccumulationPeriod();
+    return items.map((item) => ({
+      ...item,
+      mapped_category: mappings[item.content]?.category ?? this.defaultMappingForContent(item.content, period).category,
+    }));
   }
 
   async deleteWeflabUrl(): Promise<void> {
@@ -322,4 +359,76 @@ export function parseDurationSeconds(text: string): number | null {
   if (secondMatch) seconds += Number(secondMatch[1]);
 
   return seconds > 0 ? seconds : null;
+}
+
+async function scrapeRouletteCatalog(url: string): Promise<Array<{ content: string; chance_text?: string }>> {
+  const window = new BrowserWindow({
+    width: 900,
+    height: 700,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  try {
+    await window.loadURL(url);
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const items = await window.webContents.executeJavaScript(`
+      (() => {
+        function clean(value) {
+          return String(value || '').replace(/\\s+/g, ' ').trim();
+        }
+        function normalizeName(text) {
+          return clean(text)
+            .replace(/\\b\\d+(?:\\.\\d+)?\\s*%\\b/g, '')
+            .replace(/확률|당첨|룰렛|목록|시청자|공유/g, '')
+            .replace(/^[#\\-•·*\\s]+/, '')
+            .replace(/[|/]+$/, '')
+            .trim();
+        }
+        const candidates = [];
+        const selectors = ['tr', 'li', '[role="row"]', '[class*="item"]', '[class*="roulette"]', '[class*="reward"]'];
+        for (const selector of selectors) {
+          for (const node of document.querySelectorAll(selector)) {
+            const text = clean(node.innerText || node.textContent);
+            if (!text || text.length > 160) continue;
+            if (!/(\\d+(?:\\.\\d+)?\\s*%|확률|룰렛|당첨|초|분|회|개|권|미션|인증|셀카|방셀)/.test(text)) continue;
+            const chance = text.match(/\\d+(?:\\.\\d+)?\\s*%/)?.[0];
+            const parts = text.split(/\\n|\\t| {2,}|\\|/).map(clean).filter(Boolean);
+            const likely = parts.find((part) => !/^\\d+(?:\\.\\d+)?\\s*%$/.test(part) && !/확률|당첨|룰렛|목록|시청자|공유/.test(part)) || text;
+            const content = normalizeName(likely);
+            if (content && content.length <= 60) candidates.push({ content, chance_text: chance });
+          }
+        }
+        if (!candidates.length) {
+          const lines = clean(document.body.innerText).split(/(?=\\d+(?:\\.\\d+)?\\s*%)|\\n/).map(clean).filter(Boolean);
+          for (const line of lines) {
+            if (line.length > 120 || !/(\\d+(?:\\.\\d+)?\\s*%|초|분|회|개|권|미션|인증|셀카|방셀)/.test(line)) continue;
+            const chance = line.match(/\\d+(?:\\.\\d+)?\\s*%/)?.[0];
+            const content = normalizeName(line);
+            if (content && content.length <= 60) candidates.push({ content, chance_text: chance });
+          }
+        }
+        const seen = new Set();
+        return candidates.filter((item) => {
+          const key = item.content;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      })();
+    `) as Array<{ content: string; chance_text?: string }>;
+
+    if (!items.length) {
+      throw new Error('룰렛 확률 공유 페이지에서 항목을 찾지 못했습니다.');
+    }
+    return items;
+  } finally {
+    if (!window.isDestroyed()) {
+      window.close();
+    }
+  }
 }

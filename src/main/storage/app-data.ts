@@ -10,6 +10,8 @@ export interface AppDataPaths {
   logs: string;
   backups: string;
   weflabUrl: string;
+  rouletteShareUrl: string;
+  rouletteCatalog: string;
 }
 
 export function getAppDataPaths(): AppDataPaths {
@@ -22,6 +24,8 @@ export function getAppDataPaths(): AppDataPaths {
     logs: path.join(root, 'logs'),
     backups: path.join(root, 'backups'),
     weflabUrl: path.join(root, 'weflab-url.local'),
+    rouletteShareUrl: path.join(root, 'roulette-share-url.local'),
+    rouletteCatalog: path.join(root, 'roulette-catalog.json'),
   };
 }
 

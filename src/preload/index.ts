@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AccumulationSummaryItem, AppStatus, LogQuery, RouletteMapping, RouletteStatus } from '../shared/types';
+import type { AccumulationSummaryItem, AppStatus, LogQuery, RouletteCatalogItem, RouletteMapping, RouletteStatus } from '../shared/types';
 
 const api = {
   getStatus: (): Promise<AppStatus> => ipcRenderer.invoke('app:status'),
@@ -21,6 +21,10 @@ const api = {
   removeTrackedExcludeKeyword: (keyword: string) => ipcRenderer.invoke('filters:tracked-exclude-remove', keyword),
   saveWeflabUrl: (url: string) => ipcRenderer.invoke('weflab:save-url', url),
   deleteWeflabUrl: () => ipcRenderer.invoke('weflab:delete-url'),
+  saveRouletteShareUrl: (url: string): Promise<RouletteCatalogItem[]> =>
+    ipcRenderer.invoke('roulette:save-share-url', url),
+  refreshRouletteCatalog: (): Promise<RouletteCatalogItem[]> => ipcRenderer.invoke('roulette:refresh-catalog'),
+  listRouletteCatalog: (): Promise<RouletteCatalogItem[]> => ipcRenderer.invoke('roulette:list-catalog'),
   startMonitor: () => ipcRenderer.invoke('monitor:start'),
   stopMonitor: () => ipcRenderer.invoke('monitor:stop'),
   startTimed: (id: string) => ipcRenderer.invoke('timed:start', id),

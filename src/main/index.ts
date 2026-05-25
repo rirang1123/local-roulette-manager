@@ -62,6 +62,9 @@ function registerIpc(): void {
   );
   ipcMain.handle('weflab:save-url', (_event, url: string) => services.saveWeflabUrl(url));
   ipcMain.handle('weflab:delete-url', () => services.deleteWeflabUrl());
+  ipcMain.handle('roulette:save-share-url', (_event, url: string) => services.saveRouletteShareUrl(url));
+  ipcMain.handle('roulette:refresh-catalog', () => services.refreshRouletteCatalog());
+  ipcMain.handle('roulette:list-catalog', () => services.listRouletteCatalog());
   ipcMain.handle('monitor:start', () => services.monitor.start());
   ipcMain.handle('monitor:stop', () => services.monitor.stop());
   ipcMain.handle('timed:start', (_event, id: string) => services.timerService.start(id));
