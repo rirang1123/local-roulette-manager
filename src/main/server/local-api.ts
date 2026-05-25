@@ -179,6 +179,21 @@ export class LocalApiServer {
       return;
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/processing/accumulation-period') {
+      const body = (await readBody(request)) as { period?: 'daily' | 'weekly' | 'monthly' };
+      if (body.period !== 'daily' && body.period !== 'weekly' && body.period !== 'monthly') {
+        throw new Error('valid period is required');
+      }
+      await this.services.setAccumulationPeriod(body.period);
+      sendJson(response, 200, await this.services.status());
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/events/sample') {
+      sendJson(response, 200, { event: await this.services.addSampleEvent() });
+      return;
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/processing/items') {
       const category = url.searchParams.get('category');
       if (!isObsManagedCategory(category)) throw new Error('valid category is required');

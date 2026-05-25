@@ -24,6 +24,11 @@ header,
   gap: 10px;
 }
 
+header > div {
+  display: grid;
+  gap: 3px;
+}
+
 h1,
 h2 {
   margin: 0;
@@ -76,6 +81,12 @@ button:disabled {
   padding: 12px;
 }
 
+.section-heading {
+  display: grid;
+  gap: 3px;
+  padding-top: 4px;
+}
+
 .status {
   display: grid;
   gap: 5px;
@@ -121,6 +132,33 @@ button:disabled {
 .list {
   display: grid;
   gap: 8px;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.field label {
+  color: #64707d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #cbd5df;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: #fff;
+  color: #17202a;
+  font: inherit;
+}
+
+.hidden {
+  display: none;
 }
 
 .item {

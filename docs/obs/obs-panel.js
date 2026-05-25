@@ -8,6 +8,11 @@
     ['tracked', '추적'],
     ['accumulation', '누적'],
   ];
+  const periods = [
+    ['daily', '일 단위'],
+    ['weekly', '주 단위'],
+    ['monthly', '월 단위'],
+  ];
   let activeCategory = 'action';
 
   injectStyle(`${assetBase}/obs/obs-panel.css?v=${assetVersion}`);
@@ -62,20 +67,35 @@
     document.body.innerHTML = `
       <main>
         <header>
-          <h1>룰렛 매니저</h1>
-          <span id="urlState" class="muted">-</span>
+          <div>
+            <h1>룰렛 매니저</h1>
+            <span id="urlState" class="muted">-</span>
+          </div>
+          <button id="sample" class="secondary">샘플</button>
         </header>
         <section id="monitorStatus" class="status stopped">
           <strong id="monitorLabel">상태 확인 중</strong>
           <span id="monitorHelp" class="muted">-</span>
         </section>
         <div class="actions">
-          <button id="start" class="start">시작</button>
-          <button id="stop" class="secondary">중지</button>
+          <button id="start" class="start">모니터링 시작</button>
+          <button id="stop" class="secondary">모니터링 중지</button>
         </div>
+        <section class="section-heading">
+          <h2>처리 관리</h2>
+          <span class="muted">대시보드에서 처리 방식을 바로 조정합니다.</span>
+        </section>
         <section class="panel">
           <h2>룰렛 적용 방식</h2>
           <div id="modes" class="modes"></div>
+          <div id="periodWrap" class="field hidden">
+            <label for="accumulationPeriod">새 누적형 기본 기간</label>
+            <select id="accumulationPeriod"></select>
+          </div>
+        </section>
+        <section id="trackedFilterWrap" class="panel hidden">
+          <h2>추적 항목 필터</h2>
+          <select id="trackedFilter"></select>
         </section>
         <section class="panel">
           <div class="row">
@@ -88,9 +108,10 @@
     `;
     document.getElementById('start').onclick = () => api('/api/monitor/start', { method: 'POST' }).then(refresh).catch(alert);
     document.getElementById('stop').onclick = () => api('/api/monitor/stop', { method: 'POST' }).then(refresh).catch(alert);
+    document.getElementById('sample').onclick = () => api('/api/events/sample', { method: 'POST' }).then(refresh).catch(() => undefined);
   }
 
-  function renderModes() {
+  function renderModes(status) {
     const root = document.getElementById('modes');
     root.innerHTML = categories.map(([key, label]) =>
       `<button class="mode ${activeCategory === key ? 'selected' : ''}" data-category="${key}">${label}</button>`
@@ -105,19 +126,51 @@
         await refresh();
       };
     });
+
+    const periodWrap = document.getElementById('periodWrap');
+    periodWrap.className = activeCategory === 'accumulation' ? 'field' : 'field hidden';
+    const select = document.getElementById('accumulationPeriod');
+    select.innerHTML = periods.map(([key, label]) =>
+      `<option value="${key}" ${status.accumulationPeriod === key ? 'selected' : ''}>${label}</option>`
+    ).join('');
+    select.onchange = () => api('/api/processing/accumulation-period', {
+      method: 'POST',
+      body: JSON.stringify({ period: select.value }),
+    }).then(refresh).catch(alert);
   }
 
-  function renderItems(payload) {
+  function renderTrackedFilter(events) {
+    const wrap = document.getElementById('trackedFilterWrap');
+    const select = document.getElementById('trackedFilter');
+    if (activeCategory !== 'tracked') {
+      wrap.className = 'panel hidden';
+      return 'all';
+    }
+
+    wrap.className = 'panel';
+    const current = select.value || 'all';
+    const options = [...new Set(events.map((event) => event.roulette_content))].sort((a, b) => a.localeCompare(b));
+    select.innerHTML = '<option value="all">전체 미처리 항목</option>' + options.map((content) =>
+      `<option value="${escapeHtml(content)}" ${current === content ? 'selected' : ''}>${escapeHtml(content)}</option>`
+    ).join('');
+    select.onchange = refresh;
+    return select.value || 'all';
+  }
+
+  function renderItems(payload, trackedFilter) {
     document.getElementById('selectedTitle').textContent = labelFor(activeCategory);
     document.getElementById('selectedCount').textContent = `${payload.count}개`;
     const root = document.getElementById('items');
+    const events = activeCategory === 'tracked' && trackedFilter !== 'all'
+      ? payload.events.filter((event) => event.roulette_content === trackedFilter)
+      : payload.events;
 
-    if (!payload.events.length) {
+    if (!events.length) {
       root.innerHTML = '<div class="empty">표시할 항목이 없습니다.</div>';
       return;
     }
 
-    root.innerHTML = payload.events.map((event, index) => {
+    root.innerHTML = events.map((event, index) => {
       const title = escapeHtml(event.roulette_content);
       const meta = `${escapeHtml(event.nickname)} / ${event.value} / ${escapeHtml(event.status)}`;
       const duration = parseDurationSeconds(event.roulette_content);
@@ -198,8 +251,10 @@
     document.getElementById('urlState').textContent = status.weflabUrlSaved ? 'URL 등록됨' : 'URL 미등록';
     document.getElementById('start').disabled = running;
     document.getElementById('stop').disabled = !running;
-    renderModes();
-    renderItems(await api(`/api/processing/items?category=${activeCategory}`));
+    renderModes(status);
+    const payload = await api(`/api/processing/items?category=${activeCategory}`);
+    const trackedFilter = renderTrackedFilter(payload.events);
+    renderItems(payload, trackedFilter);
   }
 
   renderShell();
