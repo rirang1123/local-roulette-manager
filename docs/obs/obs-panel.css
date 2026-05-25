@@ -143,7 +143,7 @@ button.timer-running:disabled {
 
 .period-bar {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
+  grid-template-columns: 0.8fr 1fr 1fr;
   gap: 8px;
 }
 

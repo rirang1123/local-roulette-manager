@@ -37,6 +37,13 @@ button:disabled {
   opacity: 0.55;
 }
 
+button.timer-running:disabled {
+  opacity: 1;
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
 button.start-button {
   background: #15803d;
 }
@@ -343,6 +350,92 @@ th, td {
   display: grid;
   grid-template-columns: minmax(150px, 220px) minmax(150px, 220px);
   gap: 8px;
+}
+
+.range-tools {
+  grid-template-columns: minmax(90px, 130px) minmax(150px, 1fr) minmax(150px, 1fr);
+}
+
+.dock-board {
+  display: grid;
+  gap: 12px;
+}
+
+.dock-toolbar {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: white;
+  border: 1px solid #dce2e8;
+  border-radius: 8px;
+}
+
+.dock-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dock-tabs button {
+  border: 1px solid #dce2e8;
+  background: #f8fafc;
+  color: #17202a;
+}
+
+.dock-tabs button.selected {
+  border-color: #1769e0;
+  background: #1769e0;
+  color: #fff;
+}
+
+.dock-list-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.range-text {
+  margin: -4px 0 4px;
+}
+
+.dock-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dock-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e6ebf0;
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.dock-item > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.dock-item strong {
+  overflow-wrap: anywhere;
+}
+
+.dock-item span {
+  color: #6a7480;
+  font-size: 12px;
+}
+
+.button-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.empty {
+  margin: 0;
+  padding: 12px;
+  color: #6a7480;
 }
 
 .summary-item {

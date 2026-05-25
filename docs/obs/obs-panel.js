@@ -5,7 +5,8 @@
   const assetVersion = config.assetVersion || Date.now();
   let activeTab = 'all';
   let period = 'daily';
-  let anchorDate = new Date().toISOString().slice(0, 10);
+  let fromDate = new Date().toISOString().slice(0, 10);
+  let toDate = fromDate;
 
   injectStyle(`${assetBase}/obs/obs-panel.css?v=${assetVersion}`);
 
@@ -58,6 +59,14 @@
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
   }
 
+  function formatDateKeyLocal(date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+
   function renderShell() {
     document.body.innerHTML = `
       <main>
@@ -89,7 +98,8 @@
               <option value="weekly">주</option>
               <option value="monthly">월</option>
             </select>
-            <input id="anchorDate" type="date" />
+            <input id="fromDate" type="date" />
+            <input id="toDate" type="date" />
           </div>
         </section>
         <section class="panel">
@@ -114,13 +124,44 @@
     document.getElementById('period').value = period;
     document.getElementById('period').onchange = (event) => {
       period = event.target.value;
+      applyQuickRange();
       refresh().catch(() => undefined);
     };
-    document.getElementById('anchorDate').value = anchorDate;
-    document.getElementById('anchorDate').onchange = (event) => {
-      anchorDate = event.target.value || new Date().toISOString().slice(0, 10);
+    document.getElementById('fromDate').value = fromDate;
+    document.getElementById('fromDate').onchange = (event) => {
+      fromDate = event.target.value || new Date().toISOString().slice(0, 10);
+      if (toDate < fromDate) toDate = fromDate;
+      document.getElementById('toDate').value = toDate;
       refresh().catch(() => undefined);
     };
+    document.getElementById('toDate').value = toDate;
+    document.getElementById('toDate').onchange = (event) => {
+      toDate = event.target.value || fromDate;
+      if (toDate < fromDate) fromDate = toDate;
+      document.getElementById('fromDate').value = fromDate;
+      refresh().catch(() => undefined);
+    };
+  }
+
+  function applyQuickRange() {
+    const anchor = new Date(`${fromDate}T00:00:00`);
+    if (period === 'daily') {
+      toDate = fromDate;
+    } else if (period === 'monthly') {
+      fromDate = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, '0')}-01`;
+      toDate = formatDateKeyLocal(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0));
+    } else {
+      const day = anchor.getDay();
+      const mondayOffset = day === 0 ? -6 : 1 - day;
+      const start = new Date(anchor);
+      start.setDate(anchor.getDate() + mondayOffset);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      fromDate = formatDateKeyLocal(start);
+      toDate = formatDateKeyLocal(end);
+    }
+    document.getElementById('fromDate').value = fromDate;
+    document.getElementById('toDate').value = toDate;
   }
 
   function updateTabs() {
@@ -258,7 +299,7 @@
     document.getElementById('stop').disabled = !running;
     updateTabs();
 
-    const query = `&period=${period}&anchorDate=${anchorDate}`;
+    const query = `&from=${fromDate}&to=${toDate}`;
     if (activeTab === 'all') {
       const [action, tracked, accumulation] = await Promise.all([
         api('/api/processing/items?category=action'),

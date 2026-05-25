@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { AppStatus, RouletteCatalogItem, RouletteCategory, RouletteEvent, RouletteMapping, RouletteStatus } from '../shared/types';
 import { CATEGORY_LABELS, STATUS_LABELS } from '../shared/constants';
-import { formatDateKey, formatDateTime } from '../shared/date';
+import { dateRangeForPeriod, formatDateKey, formatDateTime } from '../shared/date';
 import './styles.css';
 
 type Page = 'dashboard' | 'logs' | 'backup-view' | 'unclassified' | 'settings';
@@ -154,68 +154,218 @@ function Manage({
   events: RouletteEvent[];
   run: (action: () => Promise<unknown>) => void;
 }) {
-  const [trackedContentFilter, setTrackedContentFilter] = useState('all');
-  const trackedOptions = [...new Set(events
-    .filter((event) => event.category === 'tracked' && event.status !== 'completed' && event.status !== 'canceled')
-    .map((event) => event.roulette_content))]
-    .sort((a, b) => a.localeCompare(b));
+  const [activeTab, setActiveTab] = useState<'all' | ManagedCategory>('all');
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const today = formatDateKey();
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
   const activeEvents = events.filter((event) => event.status !== 'completed' && event.status !== 'canceled');
   const actionEvents = activeEvents.filter((event) => event.category === 'action');
-  const trackedEvents = activeEvents.filter((event) => {
-    if (event.category !== 'tracked') return false;
-    return trackedContentFilter === 'all' || event.roulette_content === trackedContentFilter;
-  });
-  const accumulationEvents = activeEvents.filter((event) => event.category === 'accumulation' || event.category === 'timed');
+  const rangedEvents = activeEvents.filter((event) => event.received_at.slice(0, 10) >= fromDate && event.received_at.slice(0, 10) <= toDate);
+  const trackedEvents = rangedEvents.filter((event) => event.category === 'tracked');
+  const accumulationEvents = rangedEvents.filter((event) => event.category === 'accumulation');
+  const accumulationItems = summarizeAccumulation(accumulationEvents);
+  const totalCount = accumulationItems.length + actionEvents.length + trackedEvents.length;
+
+  function applyPeriod(nextPeriod: 'daily' | 'weekly' | 'monthly') {
+    setPeriod(nextPeriod);
+    const range = dateRangeForPeriod(nextPeriod, fromDate);
+    setFromDate(range.from);
+    setToDate(range.to);
+  }
 
   return (
-    <>
-      <section className="section-heading">
-        <div>
-          <h2>처리 관리</h2>
-          <p>당첨룰렛으로 지정한 항목만 당첨 처리하고, 숫자+단위 항목은 누적형, 나머지는 리액션으로 자동 분류됩니다.</p>
+    <section className="dock-board">
+      <div className="dock-toolbar">
+        <div className="dock-tabs">
+          {[
+            ['all', '전체'],
+            ['action', '리액션'],
+            ['tracked', '당첨'],
+            ['accumulation', '누적'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              className={activeTab === id ? 'selected' : ''}
+              onClick={() => setActiveTab(id as 'all' | ManagedCategory)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {activeTab !== 'action' && (
+          <div className="period-tools range-tools">
+          <select
+              value={period}
+              onChange={(event) => applyPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')}
+          >
+              <option value="daily">일</option>
+              <option value="weekly">주</option>
+              <option value="monthly">월</option>
+          </select>
+            <input type="date" value={fromDate} onChange={(event) => {
+              const value = event.target.value || today;
+              setFromDate(value);
+              if (toDate < value) setToDate(value);
+            }} />
+            <input type="date" value={toDate} onChange={(event) => {
+              const value = event.target.value || fromDate;
+              setToDate(value);
+              if (fromDate > value) setFromDate(value);
+            }} />
+          </div>
+        )}
+      </div>
+      <section className="panel dock-list-panel">
+        <div className="row-heading">
+          <h3>{activeTab === 'all' ? '전체' : CATEGORY_LABELS[activeTab]}</h3>
+          <span className="muted">{activeTab === 'all' ? totalCount : activeTab === 'action' ? actionEvents.length : activeTab === 'tracked' ? trackedEvents.length : accumulationItems.length}개</span>
+        </div>
+        {activeTab !== 'action' && <p className="muted range-text">{fromDate} ~ {toDate}</p>}
+        <div className="dock-list">
+          {(activeTab === 'all' || activeTab === 'accumulation') && (
+            <AccumulationCards items={accumulationItems} run={run} hideEmpty={activeTab === 'all'} />
+          )}
+          {(activeTab === 'all' || activeTab === 'action') && (
+            <EventCards events={actionEvents} category="action" run={run} hideEmpty={activeTab === 'all'} />
+          )}
+          {(activeTab === 'all' || activeTab === 'tracked') && (
+            <EventCards events={trackedEvents} category="tracked" run={run} hideEmpty={activeTab === 'all'} />
+          )}
+          {totalCount === 0 && activeTab === 'all' && <p className="empty">표시할 항목이 없습니다.</p>}
         </div>
       </section>
-      <section className="panel filter-panel">
-        <strong>자동 분류 규칙</strong>
-        <p className="muted">
-          당첨룰렛 설정에서 지정한 룰렛은 당첨룰렛으로 고정됩니다. 지정되지 않은 룰렛은 내용에 숫자와 단위가 있으면 누적형, 아니면 리액션으로 들어갑니다.
-        </p>
-        <label>
-          새 누적형 기본 기간
-          <select
-            value={status?.accumulationPeriod ?? 'weekly'}
-            onChange={(event) => run(() =>
-              window.rouletteApi.setAccumulationPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')
-            )}
-          >
-            <option value="daily">일 단위</option>
-            <option value="weekly">주 단위</option>
-            <option value="monthly">월 단위</option>
-          </select>
-        </label>
-      </section>
-      {actionEvents.length > 0 && <ActionQueue events={actionEvents} run={run} />}
-      <section className="panel filter-panel">
-        <strong>당첨룰렛</strong>
-        <select value={trackedContentFilter} onChange={(event) => setTrackedContentFilter(event.target.value)}>
-          <option value="all">전체 당첨 항목</option>
-          {trackedOptions.map((content) => (
-            <option value={content} key={content}>{content}</option>
-          ))}
-        </select>
-        {trackedEvents.length > 0 ? (
-          <EventTable events={trackedEvents} run={run} showCategory={false} />
-        ) : (
-          <p className="muted">처리할 당첨룰렛이 없습니다.</p>
-        )}
-      </section>
-      {accumulationEvents.length > 0 && <Accumulation events={accumulationEvents} run={run} />}
-      {activeEvents.length === 0 && <section className="panel muted">처리할 룰렛이 없습니다.</section>}
-    </>
+    </section>
   );
 }
 
 type ManagedCategory = Extract<RouletteCategory, 'action' | 'accumulation' | 'tracked'>;
+
+interface AccumulationCardItem {
+  itemName: string;
+  amount: number;
+  unit: string;
+  ids: string[];
+  running?: boolean;
+  durationSeconds?: number;
+  remainingSeconds?: number;
+}
+
+function summarizeAccumulation(events: RouletteEvent[]): AccumulationCardItem[] {
+  const summary = new Map<string, AccumulationCardItem>();
+  for (const event of events) {
+    const itemName = event.item_name ?? event.roulette_content;
+    const unit = event.unit ?? '';
+    const key = `${itemName}|${unit}`;
+    const current = summary.get(key) ?? { itemName, amount: 0, unit, ids: [] };
+    current.amount += event.amount ?? 0;
+    current.ids.push(event.id);
+    if (event.status === 'running' && event.duration_seconds) {
+      current.running = true;
+      current.durationSeconds = event.duration_seconds;
+      current.remainingSeconds = event.remaining_seconds ?? event.duration_seconds;
+    }
+    summary.set(key, current);
+  }
+  return [...summary.values()].sort((a, b) => a.itemName.localeCompare(b.itemName));
+}
+
+function secondsUntilActionExpiry(event: RouletteEvent): number | null {
+  const receivedAt = Date.parse(event.received_at);
+  if (Number.isNaN(receivedAt)) return null;
+  return Math.max(0, Math.ceil((receivedAt + 60 * 1000 - Date.now()) / 1000));
+}
+
+function EventCards({
+  events,
+  category,
+  run,
+  hideEmpty = false,
+}: {
+  events: RouletteEvent[];
+  category: Extract<ManagedCategory, 'action' | 'tracked'>;
+  run: (action: () => Promise<unknown>) => void;
+  hideEmpty?: boolean;
+}) {
+  if (!events.length) {
+    return hideEmpty ? null : <p className="empty">표시할 항목이 없습니다.</p>;
+  }
+
+  return (
+    <>
+      {events.map((event) => {
+        const duration = parseDurationFromContent(event.roulette_content);
+        return (
+          <article className="dock-item" key={event.id}>
+            <div>
+              <strong>{event.roulette_content}</strong>
+              <span>{event.nickname} / {event.value} / {STATUS_LABELS[event.status]}</span>
+              {category === 'action' && <span>자동 삭제까지 {secondsUntilActionExpiry(event) ?? '-'}초</span>}
+              {event.status === 'running' && event.duration_seconds && (
+                <span className="timer-inline">남은 시간: {formatSeconds(event.remaining_seconds ?? event.duration_seconds)}</span>
+              )}
+            </div>
+            {category === 'action' ? (
+              <button className="secondary" onClick={() => run(() => window.rouletteApi.updateStatus(event.id, 'completed'))}>없애기</button>
+            ) : event.status === 'running' && event.duration_seconds ? (
+              <div className="button-stack">
+                <button className="start-button timer-running" disabled>타이머 실행 중 ({formatSeconds(event.remaining_seconds ?? event.duration_seconds)})</button>
+                <button className="stop-button" onClick={() => run(() => window.rouletteApi.completeTimed(event.id))}>타이머 완료</button>
+              </div>
+            ) : duration ? (
+              <button className="start-button" onClick={() => run(() => window.rouletteApi.startTimerFromEvent(event.id))}>타이머 시작 ({duration}초)</button>
+            ) : (
+              <button className="secondary" onClick={() => run(() => window.rouletteApi.updateStatus(event.id, 'completed'))}>완료</button>
+            )}
+          </article>
+        );
+      })}
+    </>
+  );
+}
+
+function AccumulationCards({
+  items,
+  run,
+  hideEmpty = false,
+}: {
+  items: AccumulationCardItem[];
+  run: (action: () => Promise<unknown>) => void;
+  hideEmpty?: boolean;
+}) {
+  if (!items.length) {
+    return hideEmpty ? null : <p className="empty">표시할 항목이 없습니다.</p>;
+  }
+
+  return (
+    <>
+      {items.map((item) => (
+        <article className="dock-item" key={`${item.itemName}|${item.unit}`}>
+          <div>
+            <strong>{item.itemName} {item.amount}{item.unit}</strong>
+            <span>미완료 {item.ids.length}개 합산</span>
+          </div>
+          <div className="button-stack">
+            {item.running ? (
+              <button className="start-button timer-running" disabled>
+                타이머 실행 중 ({formatSeconds(item.remainingSeconds ?? item.durationSeconds ?? 0)})
+              </button>
+            ) : (item.unit === '초' || item.unit === '분') && (
+              <button className="start-button" onClick={() => run(() =>
+                window.rouletteApi.startTimerFromAccumulationGroup(item.ids)
+              )}>타이머 시작</button>
+            )}
+            <button className="secondary" onClick={() => run(async () => {
+              for (const id of item.ids) {
+                await window.rouletteApi.updateStatus(id, 'completed');
+              }
+            })}>완료</button>
+          </div>
+        </article>
+      ))}
+    </>
+  );
+}
 
 function ActionQueue({
   events,
