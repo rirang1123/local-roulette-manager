@@ -5,11 +5,10 @@ import { CATEGORY_LABELS, STATUS_LABELS } from '../shared/constants';
 import { formatDateKey, formatDateTime } from '../shared/date';
 import './styles.css';
 
-type Page = 'dashboard' | 'manage' | 'logs' | 'backup-view' | 'unclassified' | 'settings';
+type Page = 'dashboard' | 'logs' | 'backup-view' | 'unclassified' | 'settings';
 
 const pages: Array<{ id: Page; label: string }> = [
   { id: 'dashboard', label: '대시보드' },
-  { id: 'manage', label: '처리 관리' },
   { id: 'logs', label: '전체 로그' },
   { id: 'backup-view', label: '백업 확인' },
   { id: 'unclassified', label: '미분류' },
@@ -67,10 +66,9 @@ function App() {
       </aside>
       <main className="content">
         {error && <div className="error">{error}</div>}
-        {page === 'dashboard' && <Dashboard status={status} run={run} />}
+        {page === 'dashboard' && <Dashboard status={status} events={events} run={run} />}
         {page === 'settings' && <Settings status={status} run={run} />}
         {page === 'unclassified' && <Unclassified events={visibleEvents} run={run} />}
-        {page === 'manage' && <Manage status={status} events={events} run={run} />}
         {page === 'logs' && <LogsPage events={visibleEvents} run={run} />}
         {page === 'backup-view' && <BackupViewPage />}
       </main>
@@ -188,12 +186,12 @@ function Manage({
 
   return (
     <>
-      <header className="page-header">
+      <section className="section-heading">
         <div>
           <h2>처리 관리</h2>
           <p>선택한 방식으로 새 룰렛 결과가 저장됩니다.</p>
         </div>
-      </header>
+      </section>
       <section className="panel filter-panel">
         <strong>새 룰렛 적용 방식</strong>
         <div className="radio-row">
@@ -249,7 +247,15 @@ function Manage({
 
 type ManagedCategory = Extract<RouletteCategory, 'action' | 'accumulation' | 'tracked'>;
 
-function Dashboard({ status, run }: { status: AppStatus | null; run: (action: () => Promise<unknown>) => void }) {
+function Dashboard({
+  status,
+  events,
+  run,
+}: {
+  status: AppStatus | null;
+  events: RouletteEvent[];
+  run: (action: () => Promise<unknown>) => void;
+}) {
   const isMonitoring = Boolean(status?.monitoring);
 
   return (
@@ -284,6 +290,7 @@ function Dashboard({ status, run }: { status: AppStatus | null; run: (action: ()
           모니터링 중지
         </button>
       </section>
+      <Manage status={status} events={events} run={run} />
     </>
   );
 }

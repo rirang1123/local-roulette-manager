@@ -100,12 +100,23 @@ button.small {
   gap: 16px;
 }
 
+.section-heading {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
 .page-header h2 {
   margin: 0;
   font-size: 28px;
 }
 
-.page-header p, .muted {
+.section-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.page-header p, .section-heading p, .muted {
   color: #6a7480;
 }
 
