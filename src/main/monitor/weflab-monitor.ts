@@ -4,7 +4,7 @@ import type { MappingStore } from '../storage/mapping-store';
 import type { SettingsStore } from '../storage/settings-store';
 import type { SecureUrlStore } from '../storage/secure-url-store';
 import type { RouletteEvent, RouletteMapping } from '../../shared/types';
-import { parseAccumulationContent } from '../../shared/accumulation';
+import { hasAccumulationAmount, parseAccumulationContent } from '../../shared/accumulation';
 import { DuplicateGuard } from './duplicate-guard';
 import { normalizeEvent, type RawRoulettePayload } from './event-normalizer';
 
@@ -79,11 +79,7 @@ export class WeflabMonitor {
     const content = payload.roulette_content.trim();
     const explicitMapping = overrideMapping ?? (await this.mappingStore.get(content));
     const settings = await this.settingsStore.get();
-    const mapping = explicitMapping ?? createDefaultMapping(
-      settings.processing.active_category,
-      content,
-      settings.processing.accumulation_period,
-    );
+    const mapping = explicitMapping ?? createDefaultMapping(content, settings.processing.accumulation_period);
     const event = normalizeEvent(payload, mapping);
     if (this.duplicateGuard.isDuplicate(event)) {
       return null;
@@ -217,15 +213,11 @@ export class WeflabMonitor {
   }
 }
 
-function createDefaultMapping(
-  category: 'action' | 'accumulation' | 'tracked' | 'timed',
-  content: string,
-  accumulationPeriod: 'daily' | 'weekly' | 'monthly',
-): RouletteMapping {
-  if (category === 'accumulation') {
+function createDefaultMapping(content: string, accumulationPeriod: 'daily' | 'weekly' | 'monthly'): RouletteMapping {
+  if (hasAccumulationAmount(content)) {
     const parsed = parseAccumulationContent(content);
     return {
-      category,
+      category: 'accumulation',
       item_name: parsed.item_name,
       amount: parsed.amount,
       unit: parsed.unit,
@@ -233,14 +225,5 @@ function createDefaultMapping(
     };
   }
 
-  if (category === 'timed') {
-    return {
-      category,
-      timer_name: content,
-      duration_seconds: 600,
-      auto_start: false,
-    };
-  }
-
-  return { category };
+  return { category: 'action' };
 }

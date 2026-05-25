@@ -11,7 +11,7 @@ const pages: Array<{ id: Page; label: string }> = [
   { id: 'dashboard', label: '대시보드' },
   { id: 'logs', label: '전체 로그' },
   { id: 'backup-view', label: '백업 확인' },
-  { id: 'unclassified', label: '미분류' },
+  { id: 'unclassified', label: '당첨 설정' },
   { id: 'settings', label: '설정' },
 ];
 
@@ -48,7 +48,6 @@ function App() {
   }, []);
 
   const visibleEvents = useMemo(() => {
-    if (page === 'unclassified') return events.filter((event) => event.category === 'unclassified');
     return events;
   }, [events, page]);
 
@@ -156,93 +155,62 @@ function Manage({
   run: (action: () => Promise<unknown>) => void;
 }) {
   const [trackedContentFilter, setTrackedContentFilter] = useState('all');
-  const categories: Array<{ id: ManagedCategory; label: string }> = [
-    { id: 'action', label: CATEGORY_LABELS.action },
-    { id: 'tracked', label: CATEGORY_LABELS.tracked },
-    { id: 'accumulation', label: CATEGORY_LABELS.accumulation },
-  ];
-
-  const activeCategory =
-    status?.activeCategory === 'timed'
-      ? 'accumulation'
-      : status?.activeCategory ?? 'tracked';
   const trackedOptions = [...new Set(events
     .filter((event) => event.category === 'tracked' && event.status !== 'completed' && event.status !== 'canceled')
     .map((event) => event.roulette_content))]
     .sort((a, b) => a.localeCompare(b));
-  const filtered = events.filter((event) => {
-    if (event.status === 'completed' || event.status === 'canceled') return false;
-    if (activeCategory === 'accumulation') {
-      return event.category === 'accumulation' || event.category === 'timed';
-    }
-    if (event.category !== activeCategory) return false;
-    if (activeCategory === 'tracked' && trackedContentFilter !== 'all') {
-      return event.roulette_content === trackedContentFilter;
-    }
-    return true;
+  const activeEvents = events.filter((event) => event.status !== 'completed' && event.status !== 'canceled');
+  const actionEvents = activeEvents.filter((event) => event.category === 'action');
+  const trackedEvents = activeEvents.filter((event) => {
+    if (event.category !== 'tracked') return false;
+    return trackedContentFilter === 'all' || event.roulette_content === trackedContentFilter;
   });
-  const accumulationEvents = filtered.filter((event) => event.category === 'accumulation');
-  const actionEvents = filtered.filter((event) => event.category === 'action');
-  const tableEvents = filtered.filter((event) => event.category !== 'accumulation');
+  const accumulationEvents = activeEvents.filter((event) => event.category === 'accumulation' || event.category === 'timed');
 
   return (
     <>
       <section className="section-heading">
         <div>
           <h2>처리 관리</h2>
-          <p>선택한 방식으로 새 룰렛 결과가 저장됩니다.</p>
+          <p>당첨룰렛으로 지정한 항목만 당첨 처리하고, 숫자+단위 항목은 누적형, 나머지는 리액션으로 자동 분류됩니다.</p>
         </div>
       </section>
       <section className="panel filter-panel">
-        <strong>새 룰렛 적용 방식</strong>
-        <div className="radio-row">
-          {categories.map((category) => (
-            <label className={`radio-card ${activeCategory === category.id ? 'selected' : ''}`} key={category.id}>
-              <input
-                type="radio"
-                name="active-category"
-                checked={activeCategory === category.id}
-                onChange={() => run(() => window.rouletteApi.setActiveCategory(category.id))}
-              />
-              {category.label}
-            </label>
-          ))}
-        </div>
+        <strong>자동 분류 규칙</strong>
         <p className="muted">
-          현재 선택: {CATEGORY_LABELS[activeCategory]}. 매핑이 없는 새 룰렛은 이 방식으로 저장됩니다.
+          당첨룰렛 설정에서 지정한 룰렛은 당첨룰렛으로 고정됩니다. 지정되지 않은 룰렛은 내용에 숫자와 단위가 있으면 누적형, 아니면 리액션으로 들어갑니다.
         </p>
-        {activeCategory === 'accumulation' && (
-          <label>
-            새 누적형 기본 기간
-            <select
-              value={status?.accumulationPeriod ?? 'weekly'}
-              onChange={(event) => run(() =>
-                window.rouletteApi.setAccumulationPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')
-              )}
-            >
-              <option value="daily">일 단위</option>
-              <option value="weekly">주 단위</option>
-              <option value="monthly">월 단위</option>
-            </select>
-          </label>
+        <label>
+          새 누적형 기본 기간
+          <select
+            value={status?.accumulationPeriod ?? 'weekly'}
+            onChange={(event) => run(() =>
+              window.rouletteApi.setAccumulationPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')
+            )}
+          >
+            <option value="daily">일 단위</option>
+            <option value="weekly">주 단위</option>
+            <option value="monthly">월 단위</option>
+          </select>
+        </label>
+      </section>
+      {actionEvents.length > 0 && <ActionQueue events={actionEvents} run={run} />}
+      <section className="panel filter-panel">
+        <strong>당첨룰렛</strong>
+        <select value={trackedContentFilter} onChange={(event) => setTrackedContentFilter(event.target.value)}>
+          <option value="all">전체 당첨 항목</option>
+          {trackedOptions.map((content) => (
+            <option value={content} key={content}>{content}</option>
+          ))}
+        </select>
+        {trackedEvents.length > 0 ? (
+          <EventTable events={trackedEvents} run={run} showCategory={false} />
+        ) : (
+          <p className="muted">처리할 당첨룰렛이 없습니다.</p>
         )}
       </section>
-      {activeCategory === 'tracked' && (
-        <section className="panel filter-panel">
-          <strong>당첨룰렛 항목 필터</strong>
-          <select value={trackedContentFilter} onChange={(event) => setTrackedContentFilter(event.target.value)}>
-            <option value="all">전체 후처리 항목</option>
-            {trackedOptions.map((content) => (
-              <option value={content} key={content}>{content}</option>
-            ))}
-          </select>
-          <p className="muted">당첨룰렛으로 들어온 룰렛 내용이 자동으로 드롭다운 항목에 추가됩니다.</p>
-        </section>
-      )}
-      {activeCategory === 'action' && actionEvents.length > 0 && <ActionQueue events={actionEvents} run={run} />}
-      {activeCategory !== 'action' && tableEvents.length > 0 && <EventTable events={tableEvents} run={run} showCategory={false} />}
-      {activeCategory === 'accumulation' && accumulationEvents.length > 0 && <Accumulation events={accumulationEvents} run={run} />}
-      {filtered.length === 0 && <section className="panel muted">선택한 처리 방식에 해당하는 룰렛이 없습니다.</section>}
+      {accumulationEvents.length > 0 && <Accumulation events={accumulationEvents} run={run} />}
+      {activeEvents.length === 0 && <section className="panel muted">처리할 룰렛이 없습니다.</section>}
     </>
   );
 }
@@ -365,18 +333,73 @@ function Settings({ status, run }: { status: AppStatus | null; run: (action: () 
 
 function Unclassified({ events, run }: { events: RouletteEvent[]; run: (action: () => Promise<unknown>) => void }) {
   const unique = [...new Map(events.map((event) => [event.roulette_content, event])).values()];
+  const [selected, setSelected] = useState<string[]>([]);
+  const selectedSet = new Set(selected);
+
+  function toggle(content: string): void {
+    setSelected((current) =>
+      current.includes(content)
+        ? current.filter((item) => item !== content)
+        : [...current, content],
+    );
+  }
+
+  function selectAll(): void {
+    setSelected(unique.map((event) => event.roulette_content));
+  }
+
+  function clearSelection(): void {
+    setSelected([]);
+  }
+
+  async function applyToSelected(action: 'tracked' | 'auto'): Promise<void> {
+    for (const content of selected) {
+      if (action === 'tracked') {
+        await window.rouletteApi.setMapping(content, { category: 'tracked' });
+      } else {
+        await window.rouletteApi.useAutoClassification(content);
+      }
+    }
+    clearSelection();
+  }
+
   return (
     <>
-      <header className="page-header"><h2>미분류</h2></header>
+      <header className="page-header">
+        <div>
+          <h2>당첨룰렛 설정</h2>
+          <p>당첨 목록에 해당하는 룰렛만 지정합니다. 나머지는 숫자+단위가 있으면 누적형, 아니면 리액션으로 자동 분류됩니다.</p>
+        </div>
+      </header>
+      <section className="panel actions wrap">
+        <button className="secondary" onClick={selectAll}>전체 선택</button>
+        <button className="secondary" onClick={clearSelection}>선택 해제</button>
+        <button disabled={!selected.length} onClick={() => run(() => applyToSelected('tracked'))}>
+          선택 항목 당첨룰렛 지정
+        </button>
+        <button disabled={!selected.length} className="secondary" onClick={() => run(() => applyToSelected('auto'))}>
+          선택 항목 자동 분류
+        </button>
+      </section>
       <div className="stack">
         {unique.map((event) => (
           <section className="panel classify" key={event.roulette_content}>
-            <h3>{event.roulette_content}</h3>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={selectedSet.has(event.roulette_content)}
+                onChange={() => toggle(event.roulette_content)}
+              />
+              <strong>{event.roulette_content}</strong>
+            </label>
+            <p className="muted">현재 분류: {CATEGORY_LABELS[event.category]}</p>
             <div className="actions wrap">
-              <ClassifyButton event={event} category="action" run={run} />
-              <ClassifyButton event={event} category="tracked" run={run} />
-              <ClassifyButton event={event} category="excluded" run={run} />
-              <AccumulationClassifyButtons event={event} run={run} />
+              <button onClick={() => run(() => window.rouletteApi.setMapping(event.roulette_content, { category: 'tracked' }))}>
+                당첨룰렛으로 지정
+              </button>
+              <button className="secondary" onClick={() => run(() => window.rouletteApi.useAutoClassification(event.roulette_content))}>
+                자동 분류로 되돌리기
+              </button>
             </div>
           </section>
         ))}

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { AccumulationSummaryItem, AccumulationPeriodType, AppStatus, LogQuery, RouletteEvent, RouletteMapping, RouletteStatus } from '../shared/types';
 import { dateRangeForPeriod, nowIsoLocal } from '../shared/date';
-import { parseAccumulationContent } from '../shared/accumulation';
+import { hasAccumulationAmount, parseAccumulationContent } from '../shared/accumulation';
 import { BackupService } from './backup/backup-service';
 import { EventStore } from './storage/event-store';
 import { FilterStore } from './storage/filter-store';
@@ -114,7 +114,17 @@ export class AppServices {
 
   async setMapping(content: string, mapping: RouletteMapping): Promise<void> {
     await this.mappingStore.set(content, mapping);
-    await this.eventStore.applyMappingToContent(content, mapping);
+    await this.eventStore.applyMappingToAnyContent(content, mapping);
+    this.emitChange();
+  }
+
+  async markTrackedRoulette(content: string): Promise<void> {
+    await this.setMapping(content, { category: 'tracked' });
+  }
+
+  async useAutoClassification(content: string): Promise<void> {
+    await this.mappingStore.delete(content);
+    await this.eventStore.applyAutoClassificationToContent(content, await this.currentAccumulationPeriod());
     this.emitChange();
   }
 
@@ -261,41 +271,39 @@ export class AppServices {
 
   async addSampleEvent(): Promise<RouletteEvent | null> {
     const settings = await this.settingsStore.get();
-    const activeCategory =
-      settings.processing.active_category === 'timed' ? 'accumulation' : settings.processing.active_category;
     const suffix = `${Math.floor(Math.random() * 90) + 10}`;
-    const accumulationSamples = [
+    const samples = [
       { nickname: `팬${suffix}`, value: 700, roulette_content: '스쿼트 10회' },
       { nickname: `팬${suffix}`, value: 700, roulette_content: '30초 미션' },
       { nickname: `팬${suffix}`, value: 700, roulette_content: '10분 미션권' },
       { nickname: `팬${suffix}`, value: 700, roulette_content: '팔굽혀펴기 5개' },
-    ];
-    const accumulationSample = accumulationSamples[Math.floor(Math.random() * accumulationSamples.length)];
-    const trackedSamples = [
       { nickname: `팬${suffix}`, value: 1000, roulette_content: '방셀권' },
       { nickname: `팬${suffix}`, value: 1000, roulette_content: '셀카 업로드' },
       { nickname: `팬${suffix}`, value: 1000, roulette_content: '사진 인증' },
-      { nickname: `팬${suffix}`, value: 1000, roulette_content: '10분 미션권' },
-      { nickname: `팬${suffix}`, value: 1000, roulette_content: '30초 미션' },
       { nickname: `팬${suffix}`, value: 1000, roulette_content: '방송 후 업로드' },
+      { nickname: `팬${suffix}`, value: 500, roulette_content: '샘플 리액션' },
     ];
-    const trackedSample = trackedSamples[Math.floor(Math.random() * trackedSamples.length)];
-    const samples = {
-      action: { nickname: `팬${suffix}`, value: 500, roulette_content: '샘플 리액션' },
-      accumulation: accumulationSample,
-      tracked: trackedSample,
-    };
-    const parsedAccumulation = parseAccumulationContent(samples.accumulation.roulette_content);
-    const mappings = {
-      action: { category: 'action' as const },
-      accumulation: {
+    const sample = samples[Math.floor(Math.random() * samples.length)];
+    const explicitMapping = await this.mappingStore.get(sample.roulette_content);
+    const mapping = explicitMapping ?? this.defaultMappingForContent(sample.roulette_content, settings.processing.accumulation_period);
+    return this.monitor.ingest(sample, mapping);
+  }
+
+  private defaultMappingForContent(content: string, period: 'daily' | 'weekly' | 'monthly'): RouletteMapping {
+    if (hasAccumulationAmount(content)) {
+      const parsedAccumulation = parseAccumulationContent(content);
+      return {
         category: 'accumulation' as const,
         ...parsedAccumulation,
-        period_type: settings.processing.accumulation_period,
-      },
-      tracked: { category: 'tracked' as const },
-    };
-    return this.monitor.ingest(samples[activeCategory], mappings[activeCategory]);
+        period_type: period,
+      };
+    }
+    return { category: 'action' };
+  }
+
+  private async currentAccumulationPeriod(): Promise<'daily' | 'weekly' | 'monthly'> {
+    const settings = await this.settingsStore.get();
+    return settings.processing.accumulation_period;
   }
 
   private emitChange(event?: RouletteEvent): void {

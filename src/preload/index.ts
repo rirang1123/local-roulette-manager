@@ -10,6 +10,7 @@ const api = {
   createBackupNow: () => ipcRenderer.invoke('backup:create-now'),
   listBackups: () => ipcRenderer.invoke('backup:list'),
   setMapping: (content: string, mapping: RouletteMapping) => ipcRenderer.invoke('mapping:set', content, mapping),
+  useAutoClassification: (content: string) => ipcRenderer.invoke('mapping:auto', content),
   setActiveCategory: (category: 'action' | 'accumulation' | 'tracked') =>
     ipcRenderer.invoke('processing:set-active-category', category),
   setAccumulationPeriod: (period: 'daily' | 'weekly' | 'monthly') =>

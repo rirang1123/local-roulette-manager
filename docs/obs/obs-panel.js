@@ -3,17 +3,7 @@
   const token = config.token || '';
   const assetBase = config.assetBase || '';
   const assetVersion = config.assetVersion || Date.now();
-  const categories = [
-    ['action', '리액션'],
-    ['tracked', '당첨룰렛'],
-    ['accumulation', '누적'],
-  ];
-  const periods = [
-    ['daily', '일 단위'],
-    ['weekly', '주 단위'],
-    ['monthly', '월 단위'],
-  ];
-  let activeCategory = 'action';
+  let trackedFilter = 'all';
 
   injectStyle(`${assetBase}/obs/obs-panel.css?v=${assetVersion}`);
 
@@ -59,10 +49,6 @@
     return seconds > 0 ? seconds : null;
   }
 
-  function labelFor(category) {
-    return categories.find(([key]) => key === category)?.[1] || category;
-  }
-
   function renderShell() {
     document.body.innerHTML = `
       <main>
@@ -81,154 +67,90 @@
           <button id="start" class="start">모니터링 시작</button>
           <button id="stop" class="secondary">모니터링 중지</button>
         </div>
-        <section class="section-heading">
-          <h2>처리 관리</h2>
-          <span class="muted">대시보드에서 처리 방식을 바로 조정합니다.</span>
-        </section>
         <section class="panel">
-          <h2>룰렛 적용 방식</h2>
-          <div id="modes" class="modes"></div>
-          <div id="periodWrap" class="field hidden">
+          <h2>자동 분류</h2>
+          <p class="muted">당첨룰렛으로 지정한 항목만 당첨 처리하고, 숫자+단위는 누적형, 나머지는 리액션으로 분류됩니다.</p>
+          <div class="field">
             <label for="accumulationPeriod">새 누적형 기본 기간</label>
-            <select id="accumulationPeriod"></select>
+            <select id="accumulationPeriod">
+              <option value="daily">일 단위</option>
+              <option value="weekly">주 단위</option>
+              <option value="monthly">월 단위</option>
+            </select>
           </div>
-        </section>
-        <section id="trackedFilterWrap" class="panel hidden">
-          <h2>당첨룰렛 항목 필터</h2>
-          <select id="trackedFilter"></select>
         </section>
         <section class="panel">
-          <div class="row">
-            <h2 id="selectedTitle">항목</h2>
-            <span id="selectedCount" class="muted">0개</span>
-          </div>
-          <div id="items" class="list"></div>
+          <div class="row"><h2>리액션</h2><span id="actionCount" class="muted">0개</span></div>
+          <div id="actionItems" class="list"></div>
+        </section>
+        <section class="panel">
+          <div class="row"><h2>당첨룰렛</h2><span id="trackedCount" class="muted">0개</span></div>
+          <div class="field"><select id="trackedFilter"></select></div>
+          <div id="trackedItems" class="list"></div>
+        </section>
+        <section class="panel">
+          <div class="row"><h2>누적형</h2><span id="accumulationCount" class="muted">0개</span></div>
+          <div id="accumulationItems" class="list"></div>
         </section>
       </main>
     `;
     document.getElementById('start').onclick = () => api('/api/monitor/start', { method: 'POST' }).then(refresh).catch(alert);
     document.getElementById('stop').onclick = () => api('/api/monitor/stop', { method: 'POST' }).then(refresh).catch(alert);
     document.getElementById('sample').onclick = () => api('/api/events/sample', { method: 'POST' }).then(refresh).catch(() => undefined);
-  }
-
-  function renderModes(status) {
-    const root = document.getElementById('modes');
-    root.innerHTML = categories.map(([key, label]) =>
-      `<button class="mode ${activeCategory === key ? 'selected' : ''}" data-category="${key}">${label}</button>`
-    ).join('');
-    root.querySelectorAll('button').forEach((button) => {
-      button.onclick = async () => {
-        activeCategory = button.dataset.category;
-        await api('/api/processing/active-category', {
-          method: 'POST',
-          body: JSON.stringify({ category: activeCategory }),
-        });
-        await refresh();
-      };
-    });
-
-    const periodWrap = document.getElementById('periodWrap');
-    periodWrap.className = activeCategory === 'accumulation' ? 'field' : 'field hidden';
-    const select = document.getElementById('accumulationPeriod');
-    select.innerHTML = periods.map(([key, label]) =>
-      `<option value="${key}" ${status.accumulationPeriod === key ? 'selected' : ''}>${label}</option>`
-    ).join('');
-    select.onchange = () => api('/api/processing/accumulation-period', {
+    document.getElementById('trackedFilter').onchange = (event) => {
+      trackedFilter = event.target.value;
+      refresh().catch(() => undefined);
+    };
+    document.getElementById('accumulationPeriod').onchange = (event) => api('/api/processing/accumulation-period', {
       method: 'POST',
-      body: JSON.stringify({ period: select.value }),
+      body: JSON.stringify({ period: event.target.value }),
     }).then(refresh).catch(alert);
   }
 
   function renderTrackedFilter(events) {
-    const wrap = document.getElementById('trackedFilterWrap');
     const select = document.getElementById('trackedFilter');
-    if (activeCategory !== 'tracked') {
-      wrap.className = 'panel hidden';
-      return 'all';
-    }
-
-    wrap.className = 'panel';
-    const current = select.value || 'all';
+    const current = trackedFilter;
     const options = [...new Set(events.map((event) => event.roulette_content))].sort((a, b) => a.localeCompare(b));
-    select.innerHTML = '<option value="all">전체 미처리 항목</option>' + options.map((content) =>
-      `<option value="${escapeHtml(content)}" ${current === content ? 'selected' : ''}>${escapeHtml(content)}</option>`
+    if (current !== 'all' && !options.includes(current)) trackedFilter = 'all';
+    select.innerHTML = '<option value="all">전체 당첨 항목</option>' + options.map((content) =>
+      `<option value="${escapeHtml(content)}" ${trackedFilter === content ? 'selected' : ''}>${escapeHtml(content)}</option>`
     ).join('');
-    select.onchange = refresh;
-    return select.value || 'all';
   }
 
-  function renderItems(payload, trackedFilter) {
-    document.getElementById('selectedTitle').textContent = labelFor(activeCategory);
-    document.getElementById('selectedCount').textContent = `${payload.count}개`;
-    const root = document.getElementById('items');
-    const events = activeCategory === 'tracked' && trackedFilter !== 'all'
-      ? payload.events.filter((event) => event.roulette_content === trackedFilter)
-      : payload.events;
-
+  function renderCards(rootId, events, emptyText) {
+    const root = document.getElementById(rootId);
     if (!events.length) {
-      root.innerHTML = '<div class="empty">표시할 항목이 없습니다.</div>';
+      root.innerHTML = `<div class="empty">${emptyText}</div>`;
       return;
     }
-
-    root.innerHTML = events.map((event, index) => {
-      const title = escapeHtml(event.roulette_content);
-      const meta = `${escapeHtml(event.nickname)} / ${event.value} / ${escapeHtml(event.status)}`;
+    root.innerHTML = events.map((event) => {
       const duration = parseDurationSeconds(event.roulette_content);
-      let button = activeCategory === 'action'
-        ? `<button class="secondary" data-action="complete" data-id="${event.id}">없애기</button>`
-        : `<button data-action="complete" data-id="${event.id}">완료</button>`;
-      if (event.status === 'running' && event.duration_seconds) {
+      let button = `<button class="secondary" data-action="complete" data-id="${event.id}">완료</button>`;
+      if (event.category === 'action') {
+        button = `<button class="secondary" data-action="complete" data-id="${event.id}">없애기</button>`;
+      } else if (event.status === 'running' && event.duration_seconds) {
         button = `<button class="stop" data-action="complete-timed" data-id="${event.id}">타이머 완료</button>`;
       } else if (duration) {
         button = `<button class="start" data-action="start-timer" data-id="${event.id}">타이머 시작 (${duration}초)</button>`;
       }
-      if (payload.category === 'accumulation' && payload.summary?.[index]) {
-        const summary = payload.summary[index];
-        const canStartTimer = summary.unit === '초' || summary.unit === '분';
-        return `
-          <article class="item">
-            <div>
-              <div class="item-title">${escapeHtml(summary.item_name)} ${summary.amount}${escapeHtml(summary.unit)}</div>
-              <div class="meta">원본 ${summary.ids.length}개 합산</div>
-            </div>
-            ${canStartTimer ? `<button class="start" data-action="start-accumulation" data-index="${index}">타이머 시작</button>` : ''}
-            <button data-action="complete-group" data-index="${index}">완료</button>
-          </article>
-        `;
-      }
       return `
         <article class="item">
           <div>
-            <div class="item-title">${title}</div>
-            <div class="meta">${meta}</div>
+            <div class="item-title">${escapeHtml(event.roulette_content)}</div>
+            <div class="meta">${escapeHtml(event.nickname)} / ${event.value} / ${escapeHtml(event.status)}</div>
           </div>
           ${button}
         </article>
       `;
     }).join('');
-
     root.querySelectorAll('button').forEach((button) => {
       button.onclick = async () => {
-        const action = button.dataset.action;
         const id = button.dataset.id;
+        const action = button.dataset.action;
         if (action === 'complete-timed') {
           await api(`/api/timed/${id}/complete`, { method: 'POST' });
         } else if (action === 'start-timer') {
           await api(`/api/events/${id}/start-timer`, { method: 'POST' });
-        } else if (action === 'start-accumulation') {
-          const item = payload.summary[Number(button.dataset.index)];
-          await api('/api/accumulation/start-timer', {
-            method: 'POST',
-            body: JSON.stringify({ ids: item.ids }),
-          });
-        } else if (action === 'complete-group') {
-          const item = payload.summary[Number(button.dataset.index)];
-          for (const groupId of item.ids) {
-            await api(`/api/events/${groupId}/status`, {
-              method: 'POST',
-              body: JSON.stringify({ status: 'completed' }),
-            });
-          }
         } else {
           await api(`/api/events/${id}/status`, {
             method: 'POST',
@@ -240,9 +162,55 @@
     });
   }
 
+  function renderAccumulation(payload) {
+    document.getElementById('accumulationCount').textContent = `${payload.count}개`;
+    const root = document.getElementById('accumulationItems');
+    const summary = payload.summary || [];
+    if (!summary.length) {
+      root.innerHTML = '<div class="empty">처리할 누적형이 없습니다.</div>';
+      return;
+    }
+    root.innerHTML = summary.map((item, index) => {
+      const canStartTimer = item.unit === '초' || item.unit === '분';
+      return `
+        <article class="item">
+          <div>
+            <div class="item-title">${escapeHtml(item.item_name)} ${item.amount}${escapeHtml(item.unit)}</div>
+            <div class="meta">원본 ${item.ids.length}개 합산</div>
+          </div>
+          ${canStartTimer ? `<button class="start" data-action="start-accumulation" data-index="${index}">타이머 시작</button>` : ''}
+          <button class="secondary" data-action="complete-group" data-index="${index}">완료</button>
+        </article>
+      `;
+    }).join('');
+    root.querySelectorAll('button').forEach((button) => {
+      button.onclick = async () => {
+        const item = summary[Number(button.dataset.index)];
+        if (button.dataset.action === 'start-accumulation') {
+          await api('/api/accumulation/start-timer', {
+            method: 'POST',
+            body: JSON.stringify({ ids: item.ids }),
+          });
+        } else {
+          for (const id of item.ids) {
+            await api(`/api/events/${id}/status`, {
+              method: 'POST',
+              body: JSON.stringify({ status: 'completed' }),
+            });
+          }
+        }
+        await refresh();
+      };
+    });
+  }
+
   async function refresh() {
-    const status = await api('/api/status');
-    activeCategory = labelFor(status.activeCategory) === status.activeCategory ? 'action' : status.activeCategory;
+    const [status, action, tracked, accumulation] = await Promise.all([
+      api('/api/status'),
+      api('/api/processing/items?category=action'),
+      api('/api/processing/items?category=tracked'),
+      api('/api/processing/items?category=accumulation'),
+    ]);
     const running = Boolean(status.monitoring);
     const monitor = document.getElementById('monitorStatus');
     monitor.className = `status ${running ? 'running' : 'stopped'}`;
@@ -253,15 +221,23 @@
     document.getElementById('urlState').textContent = status.weflabUrlSaved ? 'URL 등록됨' : 'URL 미등록';
     document.getElementById('start').disabled = running;
     document.getElementById('stop').disabled = !running;
-    renderModes(status);
-    const payload = await api(`/api/processing/items?category=${activeCategory}`);
-    const trackedFilter = renderTrackedFilter(payload.events);
-    renderItems(payload, trackedFilter);
+    document.getElementById('accumulationPeriod').value = status.accumulationPeriod || 'weekly';
+
+    renderTrackedFilter(tracked.events);
+    const trackedEvents = trackedFilter === 'all'
+      ? tracked.events
+      : tracked.events.filter((event) => event.roulette_content === trackedFilter);
+
+    document.getElementById('actionCount').textContent = `${action.count}개`;
+    document.getElementById('trackedCount').textContent = `${trackedEvents.length}개`;
+    renderCards('actionItems', action.events, '처리할 리액션이 없습니다.');
+    renderCards('trackedItems', trackedEvents, '처리할 당첨룰렛이 없습니다.');
+    renderAccumulation(accumulation);
   }
 
   renderShell();
   refresh().catch((error) => {
-    document.getElementById('items').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+    document.getElementById('actionItems').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   });
   setInterval(() => refresh().catch(() => undefined), 3000);
 })();

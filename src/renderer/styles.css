@@ -269,6 +269,17 @@ input[type="radio"] {
   color: #123f8c;
 }
 
+.check-row {
+  display: flex;
+  grid-auto-flow: unset;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.check-row input {
+  flex: 0 0 auto;
+}
 
 code {
   display: block;

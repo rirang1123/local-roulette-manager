@@ -44,3 +44,9 @@ export function parseAccumulationContent(content: string): ParsedAccumulation {
     unit: '회',
   };
 }
+
+export function hasAccumulationAmount(content: string): boolean {
+  const normalized = content.trim();
+  const unitExpression = new RegExp(`\\d+(?:\\.\\d+)?\\s*(${UNIT_PATTERN})`);
+  return unitExpression.test(normalized) || /(?:\+|＋)\s*\d+(?:\.\d+)?\s*$/.test(normalized);
+}

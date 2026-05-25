@@ -18,4 +18,11 @@ export class MappingStore {
     mappings[content] = mapping;
     await writeJsonFileAtomic(paths.mappings, mappings);
   }
+
+  async delete(content: string): Promise<void> {
+    const paths = await ensureAppData();
+    const mappings = await this.getAll();
+    delete mappings[content];
+    await writeJsonFileAtomic(paths.mappings, mappings);
+  }
 }

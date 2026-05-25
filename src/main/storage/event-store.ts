@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { hasAccumulationAmount, parseAccumulationContent } from '../../shared/accumulation';
 import { formatDateKey } from '../../shared/date';
 import type { LogQuery, RouletteCategory, RouletteEvent, RouletteMapping, RouletteStatus } from '../../shared/types';
 import { ensureAppData, readJsonFile, writeJsonFileAtomic } from './app-data';
@@ -139,6 +140,46 @@ export class EventStore {
 
       for (const event of events) {
         if (event.roulette_content !== content || event.category !== 'unclassified') continue;
+        applyMapping(event, mapping);
+        changed += 1;
+        fileChanged = true;
+      }
+
+      if (fileChanged) {
+        await writeJsonFileAtomic(filePath, events);
+      }
+    }
+
+    return changed;
+  }
+
+  async applyAutoClassificationToContent(
+    content: string,
+    period: 'daily' | 'weekly' | 'monthly',
+  ): Promise<number> {
+    const mapping: RouletteMapping = hasAccumulationAmount(content)
+      ? {
+          category: 'accumulation',
+          ...parseAccumulationContent(content),
+          period_type: period,
+        }
+      : { category: 'action' };
+    return this.applyMappingToAnyContent(content, mapping);
+  }
+
+  async applyMappingToAnyContent(content: string, mapping: RouletteMapping): Promise<number> {
+    const paths = await ensureAppData();
+    const files = await this.allLogFiles();
+    let changed = 0;
+
+    for (const file of files) {
+      const filePath = path.join(paths.logs, file);
+      const events = await readJsonFile<RouletteEvent[]>(filePath, []);
+      let fileChanged = false;
+
+      for (const event of events) {
+        if (event.roulette_content !== content) continue;
+        if (event.status === 'completed' || event.status === 'canceled') continue;
         applyMapping(event, mapping);
         changed += 1;
         fileChanged = true;

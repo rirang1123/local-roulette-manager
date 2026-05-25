@@ -253,6 +253,11 @@ export class LocalApiServer {
             ...(await this.services.eventStore.byCategory('tracked', 'running')),
             ...(await this.services.eventStore.byCategory('tracked', 'pending')),
           ]
+        : category === 'accumulation'
+          ? [
+              ...(await this.services.eventStore.byCategory('accumulation', 'running')),
+              ...(await this.services.eventStore.byCategory('accumulation', 'pending')),
+            ]
         : await this.services.eventStore.byCategory(category, 'pending');
     if (category !== 'accumulation') {
       return { category, count: events.length, events };

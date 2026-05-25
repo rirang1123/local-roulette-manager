@@ -41,6 +41,7 @@ function registerIpc(): void {
   ipcMain.handle('mapping:set', (_event, content: string, mapping: RouletteMapping) =>
     services.setMapping(content, mapping),
   );
+  ipcMain.handle('mapping:auto', (_event, content: string) => services.useAutoClassification(content));
   ipcMain.handle('processing:set-active-category', (_event, category: 'action' | 'accumulation' | 'tracked' | 'timed') =>
     services.setActiveCategory(category),
   );
