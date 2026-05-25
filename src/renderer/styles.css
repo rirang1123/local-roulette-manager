@@ -353,7 +353,28 @@ th, td {
 }
 
 .range-tools {
-  grid-template-columns: minmax(90px, 130px) minmax(150px, 1fr) minmax(150px, 1fr);
+  grid-template-columns: 1fr;
+}
+
+.period-control-row,
+.date-range-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-check {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.inline-check input {
+  width: 16px;
+  height: 16px;
 }
 
 .dock-board {

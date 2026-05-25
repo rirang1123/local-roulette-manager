@@ -157,6 +157,7 @@ function Manage({
   const [activeTab, setActiveTab] = useState<'all' | ManagedCategory>('all');
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const today = formatDateKey();
+  const [todayLocked, setTodayLocked] = useState(false);
   const [fromDate, setFromDate] = useState(today);
   const [toDate, setToDate] = useState(today);
   const activeEvents = events.filter((event) => event.status !== 'completed' && event.status !== 'canceled');
@@ -167,11 +168,20 @@ function Manage({
   const accumulationItems = summarizeAccumulation(accumulationEvents);
   const totalCount = accumulationItems.length + actionEvents.length + trackedEvents.length;
 
-  function applyPeriod(nextPeriod: 'daily' | 'weekly' | 'monthly') {
+  function applyPeriod(nextPeriod: 'daily' | 'weekly' | 'monthly', anchorDate = todayLocked ? today : fromDate) {
     setPeriod(nextPeriod);
-    const range = dateRangeForPeriod(nextPeriod, fromDate);
+    const range = dateRangeForPeriod(nextPeriod, anchorDate);
     setFromDate(range.from);
     setToDate(range.to);
+  }
+
+  function toggleTodayLock(checked: boolean) {
+    setTodayLocked(checked);
+    if (checked) {
+      const range = dateRangeForPeriod(period, today);
+      setFromDate(range.from);
+      setToDate(range.to);
+    }
   }
 
   return (
@@ -195,24 +205,36 @@ function Manage({
         </div>
         {activeTab !== 'action' && (
           <div className="period-tools range-tools">
-          <select
-              value={period}
-              onChange={(event) => applyPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')}
-          >
-              <option value="daily">일</option>
-              <option value="weekly">주</option>
-              <option value="monthly">월</option>
-          </select>
-            <input type="date" value={fromDate} onChange={(event) => {
-              const value = event.target.value || today;
-              setFromDate(value);
-              if (toDate < value) setToDate(value);
-            }} />
-            <input type="date" value={toDate} onChange={(event) => {
-              const value = event.target.value || fromDate;
-              setToDate(value);
-              if (fromDate > value) setFromDate(value);
-            }} />
+            <div className="period-control-row">
+              <select
+                value={period}
+                onChange={(event) => applyPeriod(event.target.value as 'daily' | 'weekly' | 'monthly')}
+              >
+                <option value="daily">일</option>
+                <option value="weekly">주</option>
+                <option value="monthly">월</option>
+              </select>
+              <label className="inline-check">
+                <input
+                  type="checkbox"
+                  checked={todayLocked}
+                  onChange={(event) => toggleTodayLock(event.target.checked)}
+                />
+                <span>오늘 날짜로 고정</span>
+              </label>
+            </div>
+            <div className="date-range-row">
+              <input type="date" value={fromDate} disabled={todayLocked} onChange={(event) => {
+                const value = event.target.value || today;
+                setFromDate(value);
+                if (toDate < value) setToDate(value);
+              }} />
+              <input type="date" value={toDate} disabled={todayLocked} onChange={(event) => {
+                const value = event.target.value || fromDate;
+                setToDate(value);
+                if (fromDate > value) setFromDate(value);
+              }} />
+            </div>
           </div>
         )}
       </div>

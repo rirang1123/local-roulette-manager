@@ -5,7 +5,8 @@
   const assetVersion = config.assetVersion || Date.now();
   let activeTab = 'all';
   let period = 'daily';
-  let fromDate = new Date().toISOString().slice(0, 10);
+  let todayLocked = false;
+  let fromDate = formatDateKeyLocal(new Date());
   let toDate = fromDate;
 
   injectStyle(`${assetBase}/obs/obs-panel.css?v=${assetVersion}`);
@@ -93,13 +94,21 @@
             <button data-tab="accumulation">누적</button>
           </div>
           <div class="period-bar">
-            <select id="period">
-              <option value="daily">일</option>
-              <option value="weekly">주</option>
-              <option value="monthly">월</option>
-            </select>
-            <input id="fromDate" type="date" />
-            <input id="toDate" type="date" />
+            <div class="period-controls">
+              <select id="period">
+                <option value="daily">일</option>
+                <option value="weekly">주</option>
+                <option value="monthly">월</option>
+              </select>
+              <label class="check-row">
+                <input id="todayLocked" type="checkbox" />
+                <span>오늘 날짜로 고정</span>
+              </label>
+            </div>
+            <div class="date-range">
+              <input id="fromDate" type="date" />
+              <input id="toDate" type="date" />
+            </div>
           </div>
         </section>
         <section class="panel">
@@ -127,26 +136,36 @@
       applyQuickRange();
       refresh().catch(() => undefined);
     };
+    document.getElementById('todayLocked').checked = todayLocked;
+    document.getElementById('todayLocked').onchange = (event) => {
+      todayLocked = event.target.checked;
+      if (todayLocked) applyQuickRange();
+      updateDateInputs();
+      refresh().catch(() => undefined);
+    };
     document.getElementById('fromDate').value = fromDate;
     document.getElementById('fromDate').onchange = (event) => {
-      fromDate = event.target.value || new Date().toISOString().slice(0, 10);
+      fromDate = event.target.value || formatDateKeyLocal(new Date());
       if (toDate < fromDate) toDate = fromDate;
-      document.getElementById('toDate').value = toDate;
+      updateDateInputs();
       refresh().catch(() => undefined);
     };
     document.getElementById('toDate').value = toDate;
     document.getElementById('toDate').onchange = (event) => {
       toDate = event.target.value || fromDate;
       if (toDate < fromDate) fromDate = toDate;
-      document.getElementById('fromDate').value = fromDate;
+      updateDateInputs();
       refresh().catch(() => undefined);
     };
+    updateDateInputs();
   }
 
   function applyQuickRange() {
-    const anchor = new Date(`${fromDate}T00:00:00`);
+    const anchorKey = todayLocked ? formatDateKeyLocal(new Date()) : fromDate;
+    const anchor = new Date(`${anchorKey}T00:00:00`);
     if (period === 'daily') {
-      toDate = fromDate;
+      fromDate = anchorKey;
+      toDate = anchorKey;
     } else if (period === 'monthly') {
       fromDate = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, '0')}-01`;
       toDate = formatDateKeyLocal(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0));
@@ -160,8 +179,17 @@
       fromDate = formatDateKeyLocal(start);
       toDate = formatDateKeyLocal(end);
     }
-    document.getElementById('fromDate').value = fromDate;
-    document.getElementById('toDate').value = toDate;
+    updateDateInputs();
+  }
+
+  function updateDateInputs() {
+    const fromInput = document.getElementById('fromDate');
+    const toInput = document.getElementById('toDate');
+    if (!fromInput || !toInput) return;
+    fromInput.value = fromDate;
+    toInput.value = toDate;
+    fromInput.disabled = todayLocked;
+    toInput.disabled = todayLocked;
   }
 
   function updateTabs() {

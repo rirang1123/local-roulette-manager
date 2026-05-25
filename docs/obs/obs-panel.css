@@ -143,8 +143,30 @@ button.timer-running:disabled {
 
 .period-bar {
   display: grid;
-  grid-template-columns: 0.8fr 1fr 1fr;
   gap: 8px;
+}
+
+.period-controls,
+.date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.check-row {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #17202a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.check-row input {
+  width: 16px;
+  height: 16px;
 }
 
 .modes {
