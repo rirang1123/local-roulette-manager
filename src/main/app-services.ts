@@ -309,21 +309,40 @@ export class AppServices {
   async addSampleEvent(): Promise<RouletteEvent | null> {
     const settings = await this.settingsStore.get();
     const suffix = `${Math.floor(Math.random() * 90) + 10}`;
-    const samples = [
-      { nickname: `팬${suffix}`, value: 700, roulette_content: '스쿼트 10회' },
-      { nickname: `팬${suffix}`, value: 700, roulette_content: '30초 미션' },
-      { nickname: `팬${suffix}`, value: 700, roulette_content: '10분 미션권' },
-      { nickname: `팬${suffix}`, value: 700, roulette_content: '팔굽혀펴기 5개' },
-      { nickname: `팬${suffix}`, value: 1000, roulette_content: '방셀권' },
-      { nickname: `팬${suffix}`, value: 1000, roulette_content: '셀카 업로드' },
-      { nickname: `팬${suffix}`, value: 1000, roulette_content: '사진 인증' },
-      { nickname: `팬${suffix}`, value: 1000, roulette_content: '방송 후 업로드' },
-      { nickname: `팬${suffix}`, value: 500, roulette_content: '샘플 리액션' },
-    ];
-    const sample = samples[Math.floor(Math.random() * samples.length)];
+    const rouletteContents = await this.sampleRouletteContents();
+    const rouletteContent = rouletteContents[Math.floor(Math.random() * rouletteContents.length)];
+    const sample = {
+      nickname: `팬${suffix}`,
+      value: [500, 700, 1000][Math.floor(Math.random() * 3)],
+      roulette_content: rouletteContent,
+    };
     const explicitMapping = await this.mappingStore.get(sample.roulette_content);
     const mapping = explicitMapping ?? this.defaultMappingForContent(sample.roulette_content, settings.processing.accumulation_period);
     return this.monitor.ingest(sample, mapping);
+  }
+
+  private async sampleRouletteContents(): Promise<string[]> {
+    let items = await this.rouletteCatalogStore.get();
+    if (!items.length && await this.urlStore.hasRouletteShareUrl()) {
+      try {
+        items = await this.refreshRouletteCatalog();
+      } catch {
+        items = [];
+      }
+    }
+    const contents = [...new Set(items.map((item) => item.content.trim()).filter(Boolean))];
+    if (contents.length) return contents;
+    return [
+      '스쿼트 10회',
+      '30초 미션',
+      '10분 미션권',
+      '팔굽혀펴기 5개',
+      '방셀권',
+      '셀카 업로드',
+      '사진 인증',
+      '방송 후 업로드',
+      '샘플 리액션',
+    ];
   }
 
   private defaultMappingForContent(content: string, period: 'daily' | 'weekly' | 'monthly'): RouletteMapping {
