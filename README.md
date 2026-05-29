@@ -1,13 +1,13 @@
-# 룰렛 매니저 0.1.0
+# 룰렛 매니저 0.1.1
 
 Weflab 룰렛 결과를 자동으로 가져와서 OBS에서 바로 처리할 수 있게 도와주는 Windows용 프로그램입니다.
 
 설치 과정 없이 압축만 풀고 실행할 수 있습니다.
 
-[![Download v0.1.0](https://img.shields.io/badge/Download-v0.1.0%20(Windows%20zip)-2563eb?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/rirang1123/local-roulette-manager/releases/download/v0.1.0/Roulette-Manager-portable-folder-0.1.0-today-lock.zip)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.1.0-475569?style=for-the-badge&logo=github&logoColor=white)](https://github.com/rirang1123/local-roulette-manager/releases/tag/v0.1.0)
+[![Download v0.1.1](https://img.shields.io/badge/Download-v0.1.1%20(Windows%20zip)-2563eb?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/rirang1123/local-roulette-manager/releases/download/v0.1.1/Roulette-Manager-portable-folder-0.1.1.zip)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.1.1-475569?style=for-the-badge&logo=github&logoColor=white)](https://github.com/rirang1123/local-roulette-manager/releases/tag/v0.1.1)
 
-위 `Download` 버튼을 누르면 `Roulette-Manager-portable-folder-0.1.0-today-lock.zip` 파일이 바로 다운로드됩니다.
+위 `Download` 버튼을 누르면 `Roulette-Manager-portable-folder-0.1.1.zip` 파일이 바로 다운로드됩니다.
 
 ## 이런 상황에 사용합니다
 
@@ -20,13 +20,13 @@ Weflab 룰렛 결과를 자동으로 가져와서 OBS에서 바로 처리할 수
 ## 다운로드와 실행
 
 1. 아래 GitHub Release 페이지로 이동합니다.
-2. `Roulette-Manager-portable-folder-0.1.0-today-lock.zip` 파일을 다운로드합니다.
+2. `Roulette-Manager-portable-folder-0.1.1.zip` 파일을 다운로드합니다.
 3. zip 파일의 압축을 풉니다.
 4. 압축을 푼 폴더 안의 `Roulette Manager.exe`를 더블클릭합니다.
 
 다운로드:
 
-https://github.com/rirang1123/local-roulette-manager/releases/tag/v0.1.0
+https://github.com/rirang1123/local-roulette-manager/releases/tag/v0.1.1
 
 ## 처음 실행하면 할 일
 
@@ -151,4 +151,4 @@ OBS 브라우저 독을 새로고침합니다.
 더 자세한 사용 방법은 아래 문서를 확인하세요.
 
 - [사용설명서](docs/USER_GUIDE.md)
-- [0.1.0 릴리스 노트](docs/RELEASE_NOTES_0.1.0.md)
+- [0.1.1 릴리스 노트](docs/RELEASE_NOTES_0.1.1.md)

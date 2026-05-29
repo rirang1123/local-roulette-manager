@@ -1,6 +1,6 @@
 {
   "name": "local-roulette-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Local-only roulette result manager for Weflab and OBS browser dock.",
   "main": "dist/main/index.js",
@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.main.json && vite build",
     "dist": "npm run build && electron-builder --win",
     "dist:dir": "npm run build && electron-builder --win --dir",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "test:parser": "tsc -p tsconfig.main.json && node scripts/test-weflab-parser.js"
   },
   "build": {
     "appId": "com.local.roulette-manager",

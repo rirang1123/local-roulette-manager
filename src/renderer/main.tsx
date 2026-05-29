@@ -20,6 +20,8 @@ function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [events, setEvents] = useState<RouletteEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [weflabUrlDraft, setWeflabUrlDraft] = useState('');
+  const [rouletteShareUrlDraft, setRouletteShareUrlDraft] = useState('');
 
   async function refresh() {
     const [nextStatus, nextEvents] = await Promise.all([
@@ -66,8 +68,23 @@ function App() {
       <main className="content">
         {error && <div className="error">{error}</div>}
         {page === 'dashboard' && <Dashboard status={status} events={events} run={run} />}
-        {page === 'settings' && <Settings status={status} run={run} />}
-        {page === 'unclassified' && <Unclassified status={status} events={visibleEvents} run={run} />}
+        {page === 'settings' && (
+          <Settings
+            status={status}
+            run={run}
+            url={weflabUrlDraft}
+            setUrl={setWeflabUrlDraft}
+          />
+        )}
+        {page === 'unclassified' && (
+          <Unclassified
+            status={status}
+            events={visibleEvents}
+            run={run}
+            shareUrl={rouletteShareUrlDraft}
+            setShareUrl={setRouletteShareUrlDraft}
+          />
+        )}
         {page === 'logs' && <LogsPage events={visibleEvents} run={run} />}
         {page === 'backup-view' && <BackupViewPage />}
       </main>
@@ -467,9 +484,17 @@ function Dashboard({
   );
 }
 
-function Settings({ status, run }: { status: AppStatus | null; run: (action: () => Promise<unknown>) => void }) {
-  const [url, setUrl] = useState('');
-  const [shareUrl, setShareUrl] = useState('');
+function Settings({
+  status,
+  run,
+  url,
+  setUrl,
+}: {
+  status: AppStatus | null;
+  run: (action: () => Promise<unknown>) => void;
+  url: string;
+  setUrl: (value: string) => void;
+}) {
   return (
     <>
       <header className="page-header">
@@ -487,6 +512,7 @@ function Settings({ status, run }: { status: AppStatus | null; run: (action: () 
           <button onClick={() => run(() => window.rouletteApi.saveWeflabUrl(url))}>등록</button>
           <button className="secondary" onClick={() => run(() => window.rouletteApi.deleteWeflabUrl())}>삭제</button>
         </div>
+        <p className="muted">등록 상태: {status?.weflabUrlSaved ? '등록됨' : '미등록'}</p>
       </section>
       <section className="panel">
         <h3>OBS 브라우저 독 URL</h3>
@@ -507,14 +533,17 @@ function Settings({ status, run }: { status: AppStatus | null; run: (action: () 
 function Unclassified({
   status,
   run,
+  shareUrl,
+  setShareUrl,
 }: {
   status: AppStatus | null;
   events: RouletteEvent[];
   run: (action: () => Promise<unknown>) => void;
+  shareUrl: string;
+  setShareUrl: (value: string) => void;
 }) {
   const [items, setItems] = useState<RouletteCatalogItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [shareUrl, setShareUrl] = useState('');
   const selectedSet = new Set(selected);
 
   async function refreshCatalog(): Promise<void> {
